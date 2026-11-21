@@ -2138,19 +2138,19 @@ export default function StaffPage() {
                     <div className="p-3 text-xs space-y-2">
                       <div className="flex justify-between text-slate-600">
                         <span>Basic Salary (50%)</span>
-                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 45000) * 0.5).toLocaleString('en-IN')}</span>
+                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 0) * 0.5).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>House Rent Allowance (HRA 30%)</span>
-                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 45000) * 0.3).toLocaleString('en-IN')}</span>
+                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 0) * 0.3).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>Special Allowance & Tech Perks (20%)</span>
-                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 45000) * 0.2).toLocaleString('en-IN')}</span>
+                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 0) * 0.2).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="pt-2 border-t border-slate-100 flex justify-between font-bold text-slate-900">
                         <span>Total Gross Earnings</span>
-                        <span className="font-mono text-emerald-700">₹{(selectedSlipStaff.staff.monthlySalary || 45000).toLocaleString('en-IN')}</span>
+                        <span className="font-mono text-emerald-700">₹{(selectedSlipStaff.staff.monthlySalary || 0).toLocaleString('en-IN')}</span>
                       </div>
                     </div>
                   </div>
@@ -2165,13 +2165,13 @@ export default function StaffPage() {
                       <div className="flex justify-between text-slate-600">
                         <span>Unapproved Absences ({selectedSlipStaff.absentDays} days)</span>
                         <span className="font-mono font-semibold text-rose-600">
-                          -₹{Math.round(selectedSlipStaff.absentDays * ((selectedSlipStaff.staff.monthlySalary || 45000) / 30)).toLocaleString('en-IN')}
+                          -₹{Math.round(selectedSlipStaff.absentDays * ((selectedSlipStaff.staff.monthlySalary || 0) / 30)).toLocaleString('en-IN')}
                         </span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>Half-Days / Late Clock-ins ({selectedSlipStaff.halfDays})</span>
                         <span className="font-mono font-semibold text-rose-600">
-                          -₹{Math.round(selectedSlipStaff.halfDays * ((selectedSlipStaff.staff.monthlySalary || 45000) / 60)).toLocaleString('en-IN')}
+                          -₹{Math.round(selectedSlipStaff.halfDays * ((selectedSlipStaff.staff.monthlySalary || 0) / 60)).toLocaleString('en-IN')}
                         </span>
                       </div>
                       <div className="flex justify-between text-slate-600">

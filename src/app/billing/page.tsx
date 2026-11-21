@@ -639,7 +639,7 @@ Nearlook Agency • +91 98765 43208`;
     const phone = receipt.clientPhone || client?.whatsappNumber || '9876543210';
     const cleanPhone = phone.replace(/\D/g, '');
 
-    const contractTotal = receipt.totalContractValue || 410650;
+    const contractTotal = receipt.totalContractValue || 0;
     const paidToDate = receipt.totalPaidToDate || receipt.amount;
     const remainingBal = receipt.remainingBalanceDue ?? Math.max(0, contractTotal - paidToDate);
 
@@ -726,7 +726,7 @@ Nearlook Agency • +91 98765 43208`;
 
   // Copy receipt summary to clipboard
   const handleCopyReceiptText = (receipt: PaymentReceipt) => {
-    const contractTotal = receipt.totalContractValue || 410650;
+    const contractTotal = receipt.totalContractValue || 0;
     const paidToDate = receipt.totalPaidToDate || receipt.amount;
     const remainingBal = receipt.remainingBalanceDue ?? Math.max(0, contractTotal - paidToDate);
 
@@ -890,7 +890,7 @@ Nearlook Agency • +91 98765 43208`;
                   ...newInvoiceForm,
                   clientId: defaultProj.clientId,
                   projectId: defaultProj.id,
-                  subtotal: String(defaultProj.totalValue || 410650)
+                  subtotal: String(defaultProj.totalValue || 0)
                 });
               }
               setShowInvoiceModal(true);
@@ -1781,7 +1781,7 @@ Nearlook Agency • +91 98765 43208`;
                         ...newInvoiceForm,
                         clientId: cId,
                         projectId: targetProj?.id || '',
-                        subtotal: targetProj ? String(targetProj.totalValue || 410650) : newInvoiceForm.subtotal
+                        subtotal: targetProj ? String(targetProj.totalValue || 0) : newInvoiceForm.subtotal
                       });
                     }}
                     className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1805,7 +1805,7 @@ Nearlook Agency • +91 98765 43208`;
                       setNewInvoiceForm({
                         ...newInvoiceForm,
                         projectId: pId,
-                        subtotal: proj ? String(proj.totalValue || 410650) : newInvoiceForm.subtotal
+                        subtotal: proj ? String(proj.totalValue || 0) : newInvoiceForm.subtotal
                       });
                     }}
                     className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
@@ -2809,21 +2809,21 @@ Accounts Desk: +91 98765 43208 • Nearlook Agency`}
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-slate-700">Total Contract Value:</span>
                   <span className="font-mono font-bold text-slate-900">
-                    ₹{(activeReceiptModal.totalContractValue || 410650).toLocaleString('en-IN')}
+                    ₹{(activeReceiptModal.totalContractValue || 0).toLocaleString('en-IN')}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs text-emerald-800">
                   <span>➖ Total Cumulative Paid to Date:</span>
                   <span className="font-mono font-bold">
-                    -₹{(activeReceiptModal.totalPaidToDate || activeReceiptModal.amount).toLocaleString('en-IN')}
+                    -₹{(activeReceiptModal.totalPaidToDate || activeReceiptModal.amount || 0).toLocaleString('en-IN')}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs pt-2 border-t border-blue-200">
                   <span className="font-black text-rose-700">Current Remaining Balance Due:</span>
                   <span className="font-mono font-black text-rose-700 text-base">
-                    ₹{(activeReceiptModal.remainingBalanceDue ?? Math.max(0, (activeReceiptModal.totalContractValue || 410650) - (activeReceiptModal.totalPaidToDate || activeReceiptModal.amount))).toLocaleString('en-IN')}
+                    ₹{(activeReceiptModal.remainingBalanceDue ?? Math.max(0, (activeReceiptModal.totalContractValue || 0) - (activeReceiptModal.totalPaidToDate || activeReceiptModal.amount || 0))).toLocaleString('en-IN')}
                   </span>
                 </div>
 

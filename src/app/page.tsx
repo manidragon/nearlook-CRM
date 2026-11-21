@@ -538,7 +538,7 @@ export default function Dashboard() {
                   Upcoming Dues in 2 Days ({metrics?.twoDayUpcomingDuesCount || 0})
                 </span>
                 <span className="font-mono font-black text-amber-900 text-sm">
-                  {formatINR(metrics?.twoDayUpcomingDuesAmount || 100000)}
+                  {formatINR(metrics?.twoDayUpcomingDuesAmount || 0)}
                 </span>
               </div>
 

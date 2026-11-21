@@ -242,7 +242,7 @@ export default function StaffPortalPage() {
   };
 
   // Salary Calculations
-  const monthlySalary = currentStaff.monthlySalary || 65000;
+  const monthlySalary = currentStaff.monthlySalary || 0;
   const absentDays = attendance.filter(a => a.status === 'ABSENT').length;
   const halfDays = attendance.filter(a => a.status === 'HALF_DAY').length;
   const dailyRate = Math.round(monthlySalary / 30);

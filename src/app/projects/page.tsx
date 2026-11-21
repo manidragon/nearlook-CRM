@@ -229,8 +229,8 @@ export default function ProjectsPage() {
                 : (lead.serviceType ? lead.serviceType.replace(/_/g, ' ') : 'Digital Platform');
               setFormTitle(`${lead.businessName} - ${svcTitle} Project`);
               setFormCategory(lead.businessCategory || 'AI & FULL-STACK WEB');
-              setFormTotalValue(String(lead.estimatedDealValue || 150000));
-              setFormAdvanceRequired(String(Math.round((lead.estimatedDealValue || 150000) * 0.4)));
+              setFormTotalValue(String(lead.estimatedDealValue || 0));
+              setFormAdvanceRequired(String(Math.round((lead.estimatedDealValue || 0) * 0.4)));
               setFormDescription(`Created from Won Lead: ${lead.businessName}. Contact: ${lead.leadName} (${lead.whatsappNumber}). Inquired Scope: ${lead.servicesInterested ? lead.servicesInterested.join(', ') : lead.serviceType || 'Custom Execution'}.`);
 
               const svcStr = (lead.serviceInterested || lead.serviceType || '').toLowerCase();
@@ -358,8 +358,8 @@ export default function ProjectsPage() {
           : (lead.serviceType ? lead.serviceType.replace(/_/g, ' ') : 'Project Execution');
         setFormTitle(`${lead.businessName} - ${svcTitle}`);
         setFormCategory(lead.businessCategory || 'AI & FULL-STACK WEB');
-        setFormTotalValue(String(lead.estimatedDealValue || 150000));
-        setFormAdvanceRequired(String(Math.round((lead.estimatedDealValue || 150000) * 0.4)));
+        setFormTotalValue(String(lead.estimatedDealValue || 0));
+        setFormAdvanceRequired(String(Math.round((lead.estimatedDealValue || 0) * 0.4)));
         setFormDescription(`Created from Won Lead: ${lead.businessName}. Contact: ${lead.leadName} (${lead.whatsappNumber}). Scope: ${lead.servicesInterested ? lead.servicesInterested.join(', ') : lead.serviceType}.`);
         const svcStr = (lead.serviceInterested || lead.serviceType || '').toLowerCase();
         let domain: 'SOFTWARE' | 'WEB' | 'AI' | 'MARKETING' = 'SOFTWARE';
