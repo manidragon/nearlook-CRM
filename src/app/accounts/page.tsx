@@ -80,30 +80,17 @@ export default function AccountsPage() {
 
   // Corporate Loans & Borrowings state
   const [showLoanModal, setShowLoanModal] = useState(false);
-  const [loans, setLoans] = useState([
-    {
-      id: 'loan-1',
-      lenderName: 'Director Rajeshwar Sharma (Promoter Infusion)',
-      principal: 1500000,
-      annualInterestRate: 8.5,
-      startDate: '2026-04-01',
-      dueDate: '2027-03-31',
-      creditAccount: '1020',
-      status: 'ACTIVE' as const,
-      narration: 'Director promoter loan for AI server hardware expansion'
-    },
-    {
-      id: 'loan-2',
-      lenderName: 'HDFC Corporate Working Capital Facility',
-      principal: 2500000,
-      annualInterestRate: 9.25,
-      startDate: '2026-06-15',
-      dueDate: '2027-06-14',
-      creditAccount: '1020',
-      status: 'ACTIVE' as const,
-      narration: 'Bank overdraft facility for payroll reserve'
-    }
-  ]);
+  const [loans, setLoans] = useState<{
+    id: string;
+    lenderName: string;
+    principal: number;
+    annualInterestRate: number;
+    startDate: string;
+    dueDate: string;
+    creditAccount: string;
+    status: 'ACTIVE' | 'REPAID';
+    narration: string;
+  }[]>([]);
   const [loanForm, setLoanForm] = useState({
     lenderName: '',
     principal: '',
@@ -1122,7 +1109,14 @@ export default function AccountsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                  {loans.map(loan => {
+                  {loans.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                        No corporate borrowings or director loans recorded.
+                      </td>
+                    </tr>
+                  ) : (
+                    loans.map(loan => {
                     const elapsedDays = Math.max(1, Math.floor((Date.now() - new Date(loan.startDate).getTime()) / (1000 * 60 * 60 * 24)));
                     const interest = Math.round(loan.principal * (loan.annualInterestRate / 100) * (elapsedDays / 365));
                     const totalDue = loan.principal + interest;
