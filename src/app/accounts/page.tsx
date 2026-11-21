@@ -32,6 +32,18 @@ import {
 } from 'lucide-react';
 import { AccountHead, JournalVoucher, JournalLine } from '@/lib/types';
 
+interface CorporateLoanRecord {
+  id: string;
+  lenderName: string;
+  principal: number;
+  annualInterestRate: number;
+  startDate: string;
+  dueDate: string;
+  creditAccount: string;
+  status: 'ACTIVE' | 'REPAID';
+  narration: string;
+}
+
 export default function AccountsPage() {
   const [activeTab, setActiveTab] = useState<'daybook' | 'coa' | 'ledger' | 'trialBalance' | 'loans'>('daybook');
   const [loading, setLoading] = useState(true);
@@ -80,17 +92,7 @@ export default function AccountsPage() {
 
   // Corporate Loans & Borrowings state
   const [showLoanModal, setShowLoanModal] = useState(false);
-  const [loans, setLoans] = useState<{
-    id: string;
-    lenderName: string;
-    principal: number;
-    annualInterestRate: number;
-    startDate: string;
-    dueDate: string;
-    creditAccount: string;
-    status: 'ACTIVE' | 'REPAID';
-    narration: string;
-  }[]>([]);
+  const [loans, setLoans] = useState<CorporateLoanRecord[]>([]);
   const [loanForm, setLoanForm] = useState({
     lenderName: '',
     principal: '',
@@ -1111,104 +1113,105 @@ export default function AccountsPage() {
                 <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
                   {loans.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-xs text-slate-400">
+                      <td colSpan={9} className="py-8 text-center text-xs text-slate-400">
                         No corporate borrowings or director loans recorded.
                       </td>
                     </tr>
                   ) : (
                     loans.map(loan => {
-                    const elapsedDays = Math.max(1, Math.floor((Date.now() - new Date(loan.startDate).getTime()) / (1000 * 60 * 60 * 24)));
-                    const interest = Math.round(loan.principal * (loan.annualInterestRate / 100) * (elapsedDays / 365));
-                    const totalDue = loan.principal + interest;
+                      const elapsedDays = Math.max(1, Math.floor((Date.now() - new Date(loan.startDate).getTime()) / (1000 * 60 * 60 * 24)));
+                      const interest = Math.round(loan.principal * (loan.annualInterestRate / 100) * (elapsedDays / 365));
+                      const totalDue = loan.principal + interest;
 
-                    return (
-                      <tr key={loan.id} className="hover:bg-slate-50/80 transition">
-                        <td className="py-3 px-4">
-                          <span className="font-bold text-slate-900 block">{loan.lenderName}</span>
-                          <span className="text-[10px] text-slate-400 block">{loan.narration}</span>
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                          ₹{loan.principal.toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono font-bold">
-                            {loan.annualInterestRate}%
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
-                          {loan.startDate}
-                        </td>
-                        <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
-                          {loan.dueDate}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-bold text-amber-600">
-                          +₹{interest.toLocaleString('en-IN')}
-                          <span className="block text-[10px] text-slate-400 font-sans font-normal">{elapsedDays} days elapsed</span>
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-black text-rose-600">
-                          ₹{totalDue.toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            loan.status === 'ACTIVE'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-slate-100 text-slate-600 border border-slate-200'
-                          }`}>
-                            {loan.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              try {
-                                const res = await fetch('/api/accounts', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({
-                                    voucherType: 'PAYMENT',
-                                    date: new Date().toISOString().split('T')[0],
-                                    referenceNo: `RPY-${loan.id}`,
-                                    narration: `Repayment in full of corporate borrowing to ${loan.lenderName}`,
-                                    lines: [
-                                      {
-                                        accountCode: '2060',
-                                        accountName: 'Corporate Loans & Director Borrowings',
-                                        debit: totalDue,
-                                        credit: 0
-                                      },
-                                      {
-                                        accountCode: loan.creditAccount || '1020',
-                                        accountName: 'HDFC Bank - Current A/C (Operating)',
-                                        debit: 0,
-                                        credit: totalDue
-                                      }
-                                    ]
-                                  })
-                                });
-                                const d = await res.json();
-                                if (d.success) {
-                                  setLoans(prev => prev.map(x => x.id === loan.id ? { ...x, status: 'REPAID' as any } : x));
-                                  showNotification('✅ Loan marked fully repaid & balanced PAYMENT voucher posted.', 'success');
-                                  fetchData(true);
-                                }
-                              } catch (e) {
-                                showNotification('Failed to process repayment', 'error');
-                              }
-                            }}
-                            disabled={loan.status !== 'ACTIVE'}
-                            className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                      return (
+                        <tr key={loan.id} className="hover:bg-slate-50/80 transition">
+                          <td className="py-3 px-4">
+                            <span className="font-bold text-slate-900 block">{loan.lenderName}</span>
+                            <span className="text-[10px] text-slate-400 block">{loan.narration}</span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                            ₹{loan.principal.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-mono font-bold">
+                              {loan.annualInterestRate}%
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
+                            {loan.startDate}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
+                            {loan.dueDate}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-bold text-amber-600">
+                            +₹{interest.toLocaleString('en-IN')}
+                            <span className="block text-[10px] text-slate-400 font-sans font-normal">{elapsedDays} days elapsed</span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-black text-rose-600">
+                            ₹{totalDue.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                               loan.status === 'ACTIVE'
-                                ? 'bg-slate-900 hover:bg-black text-white shadow-xs'
-                                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                            }`}
-                          >
-                            {loan.status === 'ACTIVE' ? 'Settle & Repay' : 'Repaid ✓'}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            }`}>
+                              {loan.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch('/api/accounts', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      voucherType: 'PAYMENT',
+                                      date: new Date().toISOString().split('T')[0],
+                                      referenceNo: `RPY-${loan.id}`,
+                                      narration: `Repayment in full of corporate borrowing to ${loan.lenderName}`,
+                                      lines: [
+                                        {
+                                          accountCode: '2060',
+                                          accountName: 'Corporate Loans & Director Borrowings',
+                                          debit: totalDue,
+                                          credit: 0
+                                        },
+                                        {
+                                          accountCode: loan.creditAccount || '1020',
+                                          accountName: 'HDFC Bank - Current A/C (Operating)',
+                                          debit: 0,
+                                          credit: totalDue
+                                        }
+                                      ]
+                                    })
+                                  });
+                                  const d = await res.json();
+                                  if (d.success) {
+                                    setLoans(prev => prev.map(x => x.id === loan.id ? { ...x, status: 'REPAID' as any } : x));
+                                    showNotification('✅ Loan marked fully repaid & balanced PAYMENT voucher posted.', 'success');
+                                    fetchData(true);
+                                  }
+                                } catch (e) {
+                                  showNotification('Failed to process repayment', 'error');
+                                }
+                              }}
+                              disabled={loan.status !== 'ACTIVE'}
+                              className={`px-3 py-1 rounded-lg text-xs font-bold transition cursor-pointer ${
+                                loan.status === 'ACTIVE'
+                                  ? 'bg-slate-900 hover:bg-black text-white shadow-xs'
+                                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                              }`}
+                            >
+                              {loan.status === 'ACTIVE' ? 'Settle & Repay' : 'Repaid ✓'}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
