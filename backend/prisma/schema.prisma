@@ -1,0 +1,362 @@
+// Prisma Schema for Nexus Agency ERP & IT CRM Backend
+// Local Zero-Config SQLite Database Storage
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id               String   @id @default(uuid())
+  name             String   @default("Nearlook Mart Pvt Ltd")
+  brandName        String   @default("Nexus Agency")
+  email            String   @default("support@nearlook.com")
+  phone            String   @default("+91 98765 43210")
+  address          String?  @default("Tech Hub, MG Road, Bengaluru, KA")
+  gstin            String?  @default("29AAAAA0000A1Z5")
+  currencySymbol   String   @default("₹")
+  lateFeePercent   Float    @default(2.0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Staff {
+  id            String   @id @default(uuid())
+  userId        String   @unique @default("STF-100")
+  name          String
+  email         String   @unique
+  phone         String
+  address       String?
+  monthlySalary Float    @default(45000.0)
+  hourlyRate    Float    @default(1500.0)
+  role          String   @default("DEVELOPER") // ADMIN, OWNER, ACCOUNT_MANAGER, PROJECT_MANAGER, DEVELOPER, FIELD_STAFF, DESIGNER, CONTENT_WRITER, MARKETER
+  team          String   @default("WEB_DEVELOPMENT") // MANAGEMENT, ACCOUNTS, WEB_DEVELOPMENT, MARKETING, DESIGN, CONTENT, FIELD_STAFF
+  status        String   @default("ACTIVE") // ACTIVE, INACTIVE
+  password      String   @default("Nexus@2026!")
+  avatar        String?
+  documentsJson String   @default("[]")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assignedLeads     Lead[]
+  assignedTasks     Task[]
+  attendanceRecords AttendanceRecord[]
+}
+
+model Lead {
+  id                     String    @id @default(uuid())
+  leadName               String
+  businessName           String
+  businessCategory       String?   @default("Retail & E-Commerce")
+  address                String?
+  city                   String?
+  whatsappNumber         String
+  email                  String?
+  serviceType            String    @default("WEB_DEV")
+  servicesInterestedJson String    @default("[\"WEB_DEV\"]")
+  leadStage              String    @default("NEW") // NEW, CONTACTED, PROPOSAL_SENT, NEGOTIATION, WON, LOST
+  source                 String    @default("WORD_OF_MOUTH")
+  referrerName           String?
+  estimatedDealValue     Float     @default(0)
+  leadGeneratedDate      String?
+  contactedDate          String?
+  nextFollowUpDate       String?
+  followUpNotes          String?
+  convertedDate          String?
+  notes                  String?
+  assignedTeam           String    @default("WEB_DEVELOPMENT")
+  assignedManagerId      String?
+  assignedManager        Staff?    @relation(fields: [assignedManagerId], references: [id])
+  isGreetingSent         Boolean   @default(false)
+  greetingSentAt         String?
+  consultationNotesJson  String    @default("[]")
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  quotations             Quotation[]
+}
+
+model Quotation {
+  id                    String   @id @default(uuid())
+  quotationNumber       String   @unique
+  leadId                String?
+  lead                  Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  clientBusiness        String
+  clientContact         String
+  clientPhone           String
+  clientEmail           String?
+  lineItemsJson         String   @default("[]")
+  subtotal              Float    @default(0)
+  gstType               String   @default("ADDITIONAL_18") // ADDITIONAL_18, INCLUSIVE_18, NO_GST
+  taxAmount             Float    @default(0)
+  totalAmount           Float    @default(0)
+  internalTaxCalculated Float    @default(0)
+  paymentTerms          String   @default("50% Advance / 30% Review / 20% Completion")
+  lateFeeTerms          String   @default("Payments delayed beyond the due date will incur a 2% late penalty fee per week.")
+  status                String   @default("SENT") // DRAFT, SENT, ACCEPTED, REJECTED
+  sentViaWhatsApp       Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Client {
+  id                    String    @id @default(uuid())
+  businessName          String
+  contactName           String
+  whatsappNumber        String
+  email                 String
+  website               String?
+  clientType            String    @default("ONE_TIME_PROJECT") // ONE_TIME_PROJECT, RECURRING_RETAINER
+  status                String    @default("ACTIVE") // ONBOARDING, ACTIVE, PAUSED, CHURNED
+  monthlyRetainerAmount Float     @default(0)
+  billingCycleDay       Int       @default(1)
+  retainerStartDate     DateTime?
+  retainerRenewalDate   DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  projects              Project[]
+  tasks                 Task[]
+  invoices              Invoice[]
+  receipts              PaymentReceipt[]
+  expenses              Expense[]
+}
+
+model Project {
+  id                String    @id @default(uuid())
+  clientId          String
+  client            Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title             String
+  description       String?
+  projectType       String    @default("ONE_TIME_PROJECT")
+  status            String    @default("IN_PROGRESS") // PENDING_ADVANCE, IN_PROGRESS, REVIEW, COMPLETED, ON_HOLD
+  isAdvanceReceived Boolean   @default(false)
+  advanceRequired   Float     @default(0)
+  totalValue        Float     @default(0)
+  billedAmount      Float     @default(0)
+  collectedAmount   Float     @default(0)
+  balanceDue        Float     @default(0)
+  dueDate           String?
+  startDate         DateTime?
+  targetDate        DateTime?
+  budget            Float     @default(0)
+  lateFeeAssigned   Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tasks             Task[]
+  invoices          Invoice[]
+  receipts          PaymentReceipt[]
+}
+
+model Task {
+  id              String    @id @default(uuid())
+  projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  clientId        String?
+  client          Client?   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  status          String    @default("TO_DO") // BACKLOG, TO_DO, IN_PROGRESS, INTERNAL_REVIEW, CLIENT_REVIEW, COMPLETED
+  priority        String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  serviceCategory String    @default("WEB_DEV")
+  assignedStaffId String?
+  assignedStaff   Staff?    @relation(fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  dueDate         DateTime?
+  estimatedHours  Float     @default(2.0)
+  isRecurring     Boolean   @default(false)
+  recurringRule   String    @default("NONE")
+  order           Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  subTasks        SubTask[]
+}
+
+model SubTask {
+  id          String   @id @default(uuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title       String
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model Invoice {
+  id                    String    @id @default(uuid())
+  invoiceNumber         String    @unique
+  clientId              String
+  client                Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId             String?
+  project               Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  type                  String    @default("MILESTONE_WEB_DEV") // RECURRING_RETAINER, MILESTONE_WEB_DEV, AD_HOC
+  subtotal              Float     @default(0)
+  gstType               String    @default("ADDITIONAL_18")
+  taxAmount             Float     @default(0)
+  totalAmount           Float     @default(0)
+  internalTaxCalculated Float     @default(0)
+  status                String    @default("DRAFT") // DRAFT, SENT, PAID, OVERDUE
+  issueDate             DateTime  @default(now())
+  dueDate               DateTime
+  paidDate              DateTime?
+  lineItemsJson         String    @default("[]")
+  notes                 String?
+  lateFeeAssigned       Boolean   @default(false)
+  isFinalInvoice        Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model PaymentReceipt {
+  id                  String   @id @default(uuid())
+  receiptNumber       String   @unique
+  projectId           String
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clientId            String
+  client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  amount              Float
+  totalContractValue  Float?
+  totalPaidToDate     Float?
+  remainingBalanceDue Float?
+  lateFeeAccrued      Float?   @default(0)
+  nextDueDate         String?
+  referenceId         String?
+  notes               String?
+  milestoneLabel      String   @default("Split Installment")
+  paymentMethod       String   @default("UPI / Bank Transfer")
+  recordedByStaffId   String?
+  recordedByStaffName String?
+  autoInvoiceGenerated Boolean @default(true)
+  invoiceId           String?
+  invoiceNumber       String?
+  createdAt           DateTime @default(now())
+}
+
+model Vendor {
+  id              String    @id @default(uuid())
+  companyName     String
+  contactPerson   String?
+  phone           String
+  email           String?
+  bankDetails     String?
+  serviceCategory String    @default("OFFICE_SUPPLIES")
+  totalPayable    Float     @default(0)
+  advancePaid     Float     @default(0)
+  balanceDue      Float     @default(0)
+  dueDate         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  expenses        Expense[]
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  clientId    String?
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  vendorId    String?
+  vendor      Vendor?  @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  category    String   @default("SAAS_TOOL")
+  description String
+  amount      Float    @default(0)
+  date        DateTime @default(now())
+  receiptUrl  String?
+  createdAt   DateTime @default(now())
+}
+
+model AttendanceRecord {
+  id                 String   @id @default(uuid())
+  staffId            String
+  staff              Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date               DateTime
+  status             String   @default("PRESENT")
+  reason             String?
+  isDeductionApplied Boolean  @default(false)
+  deductionAmount    Float    @default(0)
+  createdAt          DateTime @default(now())
+}
+
+model Appointment {
+  id          String   @id @default(uuid())
+  title       String
+  clientName  String
+  clientPhone String?
+  date        String
+  startTime   String
+  endTime     String
+  type        String   @default("CONSULTATION")
+  status      String   @default("CONFIRMED")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DailyReport {
+  id              String   @id @default(uuid())
+  date            String
+  staffName       String
+  completedTasks  String
+  pendingTasks    String
+  blockers        String?
+  hoursSpent      Float    @default(8.0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ITInventoryItem {
+  id            String   @id @default(uuid())
+  itemName      String
+  category      String   @default("HARDWARE")
+  serialNumber  String?
+  assignedTo    String?
+  status        String   @default("IN_USE") // IN_USE, SPARE, MAINTENANCE
+  purchaseDate  String?
+  purchaseCost  Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model JournalVoucher {
+  id            String   @id @default(uuid())
+  voucherNumber String   @unique
+  date          String
+  narration     String
+  linesJson     String   @default("[]")
+  totalDebit    Float    @default(0)
+  totalCredit   Float    @default(0)
+  createdAt     DateTime @default(now())
+}
+
+model RecycleBinItem {
+  id         String   @id @default(uuid())
+  originalId String
+  entityType String
+  title      String
+  subtitle   String?
+  deletedAt  DateTime @default(now())
+  deletedBy  String   @default("ADMIN")
+  dataJson   String   @default("{}")
+}
+
+model WhatsAppLog {
+  id              String   @id @default(uuid())
+  recipientPhone  String
+  recipientName   String
+  recipientType   String   @default("CLIENT")
+  eventType       String   @default("CUSTOM")
+  messageBody     String
+  status          String   @default("SIMULATED")
+  responsePayload String?
+  sentAt          DateTime @default(now())
+}
+
+model AgencyService {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  label     String
+  createdAt DateTime @default(now())
+}

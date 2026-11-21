@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  it-crm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: it-crm:latest
+    container_name: it_crm_app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - NEXT_PUBLIC_APP_NAME=Nexus Agency ERP & CRM
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL:-https://crm.yourdomain.com}
+      - VAULT_ENCRYPTION_KEY=${VAULT_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      - WHATSAPP_CLOUD_API_TOKEN=${WHATSAPP_CLOUD_API_TOKEN:-}
+      - WHATSAPP_PHONE_NUMBER_ID=${WHATSAPP_PHONE_NUMBER_ID:-}
+      - WHATSAPP_BUSINESS_ACCOUNT_ID=${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      - WHATSAPP_SIMULATION_MODE=${WHATSAPP_SIMULATION_MODE:-true}
+    volumes:
+      - crm_data:/app/data
+
+volumes:
+  crm_data:
+    name: it_crm_data

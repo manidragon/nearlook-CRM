@@ -1,0 +1,470 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum StaffRole {
+  ADMIN
+  OWNER
+  ACCOUNT_MANAGER
+  PROJECT_MANAGER
+  DEVELOPER
+  FIELD_STAFF
+  DESIGNER
+  CONTENT_WRITER
+  MARKETER
+}
+
+enum StaffTeam {
+  MANAGEMENT
+  ACCOUNTS
+  WEB_DEVELOPMENT
+  MARKETING
+  DESIGN
+  CONTENT
+  FIELD_STAFF
+}
+
+enum StaffStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ServiceType {
+  SEO
+  SOCIAL_MEDIA
+  WEB_DEV
+  PERFORMANCE_ADS
+  BRANDING
+  FULL_SUITE
+  DESIGN
+  CONTENT
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  PROPOSAL_SENT
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum ClientType {
+  ONE_TIME_PROJECT
+  RECURRING_RETAINER
+}
+
+enum ClientStatus {
+  ONBOARDING
+  ACTIVE
+  PAUSED
+  CHURNED
+}
+
+enum CredentialCategory {
+  WORDPRESS
+  META_BUSINESS_MANAGER
+  HOSTING_CPANEL_AWS
+  GOOGLE_ANALYTICS_GTM
+  SHOPIFY
+  CUSTOM_APP
+}
+
+enum TaskStatus {
+  BACKLOG
+  TO_DO
+  IN_PROGRESS
+  INTERNAL_REVIEW
+  CLIENT_REVIEW
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum RecurringInterval {
+  NONE
+  WEEKLY_MONDAY
+  BI_WEEKLY
+  MONTHLY_1ST
+}
+
+enum InvoiceType {
+  RECURRING_RETAINER
+  MILESTONE_WEB_DEV
+  AD_HOC
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+}
+
+enum GSTType {
+  ADDITIONAL_18
+  INCLUSIVE_18
+  NO_GST
+}
+
+enum ExpenseCategory {
+  SALARY
+  RENT
+  ELECTRICITY_EB
+  MAINTENANCE
+  PURCHASES_HARDWARE
+  TEA_SNACKS
+  SAAS_TOOL
+  HOSTING_DOMAIN
+  AD_SPEND
+  SUBCONTRACTOR
+  MISCELLANEOUS
+}
+
+enum WhatsAppRecipientType {
+  CLIENT
+  STAFF
+  VENDOR
+}
+
+enum WhatsAppEventType {
+  LEAD_WELCOME
+  PROPOSAL_SENT
+  QUOTATION_DISPATCH
+  RETAINER_INVOICE
+  MILESTONE_COMPLETION
+  DUE_REMINDER
+  TASK_ASSIGNED
+  TASK_STATUS_UPDATE
+  PAYMENT_RECEIVED
+  CONTENT_APPROVAL
+  OVERDUE_NUDGE
+  VENDOR_PAYMENT_NOTICE
+  CUSTOM
+}
+
+enum WhatsAppDeliveryStatus {
+  DELIVERED
+  SENT
+  FAILED
+  SIMULATED
+}
+
+model Staff {
+  id              String      @id @default(cuid())
+  userId          String      @unique @default("STF-100")
+  password        String      @default("Nexus@2026!")
+  name            String
+  email           String      @unique
+  phone           String
+  address         String?
+  monthlySalary   Float       @default(45000.0)
+  hourlyRate      Float       @default(1500.0)
+  role            StaffRole   @default(DEVELOPER)
+  team            StaffTeam   @default(WEB_DEVELOPMENT)
+  status          StaffStatus @default(ACTIVE)
+  avatar          String?
+  documentsJson   String      @default("[]")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  assignedLeads     Lead[]
+  assignedClients   Client[]
+  assignedTasks     Task[]
+  timeLogs          TimeLog[]
+  attendanceRecords AttendanceRecord[]
+  socialMediaTasks  SocialMediaTask[]
+}
+
+model Lead {
+  id                     String      @id @default(cuid())
+  leadName               String
+  businessName           String
+  whatsappNumber         String
+  email                  String?
+  serviceType            ServiceType @default(WEB_DEV)
+  leadStage              LeadStage   @default(NEW)
+  estimatedDealValue     Float       @default(0)
+  notes                  String?
+  assignedTeam           StaffTeam   @default(WEB_DEVELOPMENT)
+  assignedManagerId      String?
+  assignedManager        Staff?      @relation(fields: [assignedManagerId], references: [id])
+  consultationNotesJson  String      @default("[]")
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  quotations             Quotation[]
+}
+
+model Quotation {
+  id                    String    @id @default(cuid())
+  quotationNumber       String    @unique
+  leadId                String
+  lead                  Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  clientBusiness        String
+  clientContact         String
+  clientPhone           String
+  clientEmail           String?
+  lineItemsJson         String    @default("[]")
+  subtotal              Float     @default(0)
+  gstType               GSTType   @default(ADDITIONAL_18)
+  taxAmount             Float     @default(0)
+  totalAmount           Float     @default(0)
+  internalTaxCalculated Float     @default(0)
+  paymentTerms          String    @default("50% Advance / 30% Review / 20% Completion")
+  lateFeeTerms          String    @default("Payments delayed beyond the due date will incur a 2% late penalty fee per week.")
+  status                String    @default("SENT")
+  sentViaWhatsApp       Boolean   @default(true)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model Client {
+  id                    String       @id @default(cuid())
+  businessName          String
+  contactName           String
+  whatsappNumber        String
+  email                 String
+  website               String?
+  clientType            ClientType   @default(RECURRING_RETAINER)
+  status                ClientStatus @default(ACTIVE)
+  monthlyRetainerAmount Float        @default(0)
+  billingCycleDay       Int          @default(1)
+  retainerStartDate     DateTime?
+  retainerRenewalDate   DateTime?
+  assignedManagerId     String?
+  assignedManager       Staff?       @relation(fields: [assignedManagerId], references: [id])
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  vaultCredentials      CredentialVault[]
+  projects              Project[]
+  tasks                 Task[]
+  invoices              Invoice[]
+  expenses              Expense[]
+  receipts              PaymentReceipt[]
+  socialMediaTasks      SocialMediaTask[]
+}
+
+model CredentialVault {
+  id                String             @id @default(cuid())
+  clientId          String
+  client            Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  category          CredentialCategory @default(WORDPRESS)
+  label             String
+  loginUrl          String?
+  username          String
+  encryptedPassword String
+  iv                String
+  notes             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model Project {
+  id                  String      @id @default(cuid())
+  clientId            String
+  client              Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title               String
+  description         String?
+  projectType         ClientType  @default(RECURRING_RETAINER)
+  status              String      @default("IN_PROGRESS")
+  isAdvanceReceived   Boolean     @default(false)
+  advanceRequired     Float       @default(0)
+  totalValue          Float       @default(0)
+  billedAmount        Float       @default(0)
+  collectedAmount     Float       @default(0)
+  balanceDue          Float       @default(0)
+  startDate           DateTime?
+  targetDate          DateTime?
+  budget              Float       @default(0)
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  tasks               Task[]
+  invoices            Invoice[]
+  receipts            PaymentReceipt[]
+  socialMediaTasks    SocialMediaTask[]
+}
+
+model Task {
+  id                String            @id @default(cuid())
+  projectId         String?
+  project           Project?          @relation(fields: [projectId], references: [id])
+  clientId          String
+  client            Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title             String
+  description       String?
+  status            TaskStatus        @default(TO_DO)
+  priority          TaskPriority      @default(MEDIUM)
+  serviceCategory   ServiceType       @default(WEB_DEV)
+  assignedStaffId   String?
+  assignedStaff     Staff?            @relation(fields: [assignedStaffId], references: [id])
+  dueDate           DateTime?
+  estimatedHours    Float             @default(2.0)
+  isRecurring       Boolean           @default(false)
+  recurringRule     RecurringInterval @default(NONE)
+  order             Int               @default(0)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  subTasks          SubTask[]
+  timeLogs          TimeLog[]
+}
+
+model SubTask {
+  id          String   @id @default(cuid())
+  taskId      String
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title       String
+  isCompleted Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model TimeLog {
+  id              String    @id @default(cuid())
+  taskId          String
+  task            Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  staffId         String
+  staff           Staff     @relation(fields: [staffId], references: [id])
+  durationMinutes Int       @default(0)
+  startTime       DateTime?
+  endTime         DateTime?
+  isBillable      Boolean   @default(true)
+  notes           String?
+  loggedAt        DateTime  @default(now())
+}
+
+model PaymentReceipt {
+  id                  String   @id @default(cuid())
+  receiptNumber       String   @unique
+  projectId           String
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  clientId            String
+  client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  amount              Float
+  milestoneLabel      String
+  paymentMethod       String   @default("UPI")
+  recordedByStaffId   String?
+  recordedByStaffName String?
+  createdAt           DateTime @default(now())
+}
+
+model Invoice {
+  id                    String        @id @default(cuid())
+  invoiceNumber         String        @unique
+  clientId              String
+  client                Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId             String?
+  project               Project?      @relation(fields: [projectId], references: [id])
+  type                  InvoiceType   @default(RECURRING_RETAINER)
+  subtotal              Float         @default(0)
+  gstType               GSTType       @default(ADDITIONAL_18)
+  taxAmount             Float         @default(0)
+  totalAmount           Float         @default(0)
+  internalTaxCalculated Float         @default(0)
+  status                InvoiceStatus @default(DRAFT)
+  issueDate             DateTime      @default(now())
+  dueDate               DateTime
+  paidDate              DateTime?
+  lineItemsJson         String        @default("[]")
+  notes                 String?
+  isFinalInvoice        Boolean       @default(false)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+}
+
+model Vendor {
+  id              String    @id @default(cuid())
+  companyName     String
+  contactPerson   String?
+  phone           String
+  email           String?
+  bankDetails     String?
+  serviceCategory String    @default("OFFICE_SUPPLIES")
+  totalPayable    Float     @default(0)
+  advancePaid     Float     @default(0)
+  balanceDue      Float     @default(0)
+  dueDate         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  expenses        Expense[]
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  clientId    String?
+  client      Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  vendorId    String?
+  vendor      Vendor?         @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  category    ExpenseCategory @default(SAAS_TOOL)
+  description String
+  amount      Float           @default(0)
+  date        DateTime        @default(now())
+  receiptUrl  String?
+  createdAt   DateTime        @default(now())
+}
+
+model AttendanceRecord {
+  id                 String   @id @default(cuid())
+  staffId            String
+  staff              Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  date               DateTime
+  status             String   @default("PRESENT")
+  reason             String?
+  isDeductionApplied Boolean  @default(false)
+  deductionAmount    Float    @default(0)
+  createdAt          DateTime @default(now())
+}
+
+model MonthlyWorkCalendar {
+  id               String   @id @default(cuid())
+  yearMonth        String   @unique
+  workingDaysCount Int      @default(25)
+  holidaysJson     String   @default("[]")
+  updatedAt        DateTime @updatedAt
+}
+
+model SocialMediaTask {
+  id                  String    @id @default(cuid())
+  projectId           String?
+  project             Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  clientId            String
+  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  title               String
+  platform            String    @default("INSTAGRAM")
+  contentCreationDate DateTime?
+  shootDate           DateTime?
+  editingDate         DateTime?
+  postingDate         DateTime
+  status              String    @default("PLANNED")
+  assignedStaffId     String?
+  assignedStaff       Staff?    @relation(fields: [assignedStaffId], references: [id])
+  postUrl             String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model WhatsAppLog {
+  id              String                 @id @default(cuid())
+  recipientPhone  String
+  recipientName   String
+  recipientType   WhatsAppRecipientType  @default(CLIENT)
+  eventType       WhatsAppEventType      @default(CUSTOM)
+  messageBody     String
+  status          WhatsAppDeliveryStatus @default(SIMULATED)
+  responsePayload String?
+  errorDetails    String?
+  sentAt          DateTime               @default(now())
+}
