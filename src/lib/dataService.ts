@@ -49,75 +49,9 @@ export function getFinancialYearSuffix(date: Date = new Date()): string {
   return String(fyStartYear % 100).padStart(2, '0');
 }
 
-// Pre-seeded Staff with Login Credentials, Salaries & Documents (Configured for team assignment)
+// Clean Admin Profile with ₹0 Salary (Zero Mock Staff)
 let staffList: StaffMember[] = [
-  ...DEMO_PROFILES,
-  {
-    id: 'staff-2',
-    userId: 'STF-105',
-    password: 'Alex#PM2026!',
-    name: 'Alex Rivera',
-    email: 'alex@nearlook.com',
-    phone: '+919876543202',
-    address: '102 Indiranagar 100ft Rd, Bengaluru, KA',
-    monthlySalary: 85000,
-    hourlyRate: 2200,
-    role: 'PROJECT_MANAGER',
-    team: 'MANAGEMENT',
-    status: 'ACTIVE',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-    activeTasksCount: 0,
-    totalProjectsWorked: 0,
-    onTimeCompletionRate: 100,
-    overdueCount: 0,
-    salaryPaidDate: 'Pending Cycle',
-    isSalaryOverdue: false,
-    documents: []
-  },
-  {
-    id: 'staff-5',
-    userId: 'STF-106',
-    password: 'Maya#Design2026!',
-    name: 'Maya Lin',
-    email: 'maya@nearlook.com',
-    phone: '+919876543205',
-    address: '77 Koregaon Park, Pune, MH',
-    monthlySalary: 55000,
-    hourlyRate: 1600,
-    role: 'DESIGNER',
-    team: 'DESIGN',
-    status: 'ACTIVE',
-    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
-    activeTasksCount: 0,
-    totalProjectsWorked: 0,
-    onTimeCompletionRate: 100,
-    overdueCount: 0,
-    salaryPaidDate: 'Pending Cycle',
-    isSalaryOverdue: false,
-    documents: []
-  },
-  {
-    id: 'staff-6',
-    userId: 'STF-107',
-    password: 'Liam#Content2026!',
-    name: 'Liam O\'Connor',
-    email: 'liam@nearlook.com',
-    phone: '+919876543206',
-    address: '54 Jubilee Hills, Hyderabad, TS',
-    monthlySalary: 50000,
-    hourlyRate: 1400,
-    role: 'CONTENT_WRITER',
-    team: 'CONTENT',
-    status: 'ACTIVE',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
-    activeTasksCount: 0,
-    totalProjectsWorked: 0,
-    onTimeCompletionRate: 100,
-    overdueCount: 0,
-    salaryPaidDate: 'Pending Cycle',
-    isSalaryOverdue: false,
-    documents: []
-  }
+  ...DEMO_PROFILES
 ];
 
 // Clean Live Lists (Fresh Start - Zero Mock Entry Data)
@@ -3631,14 +3565,18 @@ const rawDataService = {
     financialApprovalsList.length = 0;
     clientDocumentsList.length = 0;
     chartOfAccountsList.forEach(acc => acc.balance = 0);
-    staffList.forEach(s => {
-      s.activeTasksCount = 0;
-      s.totalProjectsWorked = 0;
-      s.overdueCount = 0;
-      s.salaryPaidDate = undefined;
-      s.isSalaryOverdue = false;
-      s.documents = [];
-    });
+    staffList.length = 0;
+    DEMO_PROFILES.forEach(p => staffList.push({
+      ...p,
+      monthlySalary: 0,
+      hourlyRate: 0,
+      activeTasksCount: 0,
+      totalProjectsWorked: 0,
+      overdueCount: 0,
+      salaryPaidDate: undefined,
+      isSalaryOverdue: false,
+      documents: []
+    }));
     persistStore();
     return { success: true, message: 'All entry data cleared. Fresh start ready.' };
   }
