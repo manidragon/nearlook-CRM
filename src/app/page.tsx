@@ -247,23 +247,25 @@ export default function Dashboard() {
   });
 
   // Module 5: Fixed Commitments, Burn Rate & Cash Runway
-  const staffPayroll = staff.reduce((sum, s) => sum + (s.monthlySalary || 0), 0) || 385000;
-  const rentMonthly = 120000; // Tech Hub Tower Suite 402 Lease
+  const staffPayroll = staff.reduce((sum, s) => sum + (s.monthlySalary || 0), 0);
+  const rentMonthly = expenses
+    .filter(e => e.category === 'RENT')
+    .reduce((sum, e) => sum + (e.amount || 0), 0);
   const cloudHostingMonthly = expenses
     .filter(e => e.category === 'HOSTING_DOMAIN' || e.category === 'SAAS_TOOL')
-    .reduce((sum, e) => sum + (e.amount || 0), 0) || 45000;
+    .reduce((sum, e) => sum + (e.amount || 0), 0);
   const utilitiesMonthly = expenses
     .filter(e => e.category === 'ELECTRICITY_EB' || e.category === 'MAINTENANCE' || e.category === 'TEA_SNACKS')
-    .reduce((sum, e) => sum + (e.amount || 0), 0) || 28000;
+    .reduce((sum, e) => sum + (e.amount || 0), 0);
 
   const totalFixedMonthlyCommitments = staffPayroll + rentMonthly + cloudHostingMonthly + utilitiesMonthly;
 
   // Liquid Reserves & Cash Runway
-  const liquidReserves = ((metrics?.totalCollectionsInBank || 0) + (metrics?.totalCollectionsInCash || 0)) || (metrics?.clientCollectedTotal || 0) || 1250000;
+  const liquidReserves = ((metrics?.totalCollectionsInBank || 0) + (metrics?.totalCollectionsInCash || 0)) || (metrics?.clientCollectedTotal || 0);
   const runwayMonths = totalFixedMonthlyCommitments > 0
     ? (liquidReserves / totalFixedMonthlyCommitments).toFixed(1)
-    : '5.2';
-  const isLowRunway = Number(runwayMonths) < 2.0;
+    : '0.0';
+  const isLowRunway = totalFixedMonthlyCommitments > 0 && Number(runwayMonths) < 2.0;
 
   // Sales Target Shortfalls ("Sales to Tally") - Target 25% Net Profit Margin
   const targetMargin = 0.25;
@@ -680,11 +682,11 @@ export default function Dashboard() {
           </div>
           <div className="mt-3 space-y-1.5 text-[11px] text-slate-600 font-medium">
             <div className="flex justify-between">
-              <span>Core Staff Salaries ({staff.length || 7} team):</span>
+              <span>Core Staff Salaries ({staff.length} team):</span>
               <span className="font-bold text-slate-900 font-mono">{formatINR(staffPayroll)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Office Lease Rent (Tech Hub Suite 402):</span>
+              <span>Office Lease Rent:</span>
               <span className="font-bold text-slate-900 font-mono">{formatINR(rentMonthly)}</span>
             </div>
             <div className="flex justify-between">

@@ -41,13 +41,13 @@ export async function POST(req: Request) {
       email,
       phone,
       address: address || 'Bangalore, India',
-      monthlySalary: Number(monthlySalary) || 45000,
+      monthlySalary: Number(monthlySalary) || 0,
       role: role || 'DEVELOPER',
       team: team || 'WEB_DEVELOPMENT',
-      hourlyRate: Number(hourlyRate) || undefined,
+      hourlyRate: Number(hourlyRate) || 0,
       documents: documents || [],
       shiftTiming: shiftTiming || '09:30 AM - 07:30 PM (Standard Slot)',
-      deductionsPerAbsence: Number(deductionsPerAbsence) || Math.round((Number(monthlySalary) || 45000) / 30),
+      deductionsPerAbsence: Number(deductionsPerAbsence) || (Number(monthlySalary) > 0 ? Math.round(Number(monthlySalary) / 30) : 0),
       allowedModules,
       canManageUsers: Boolean(canManageUsers)
     });

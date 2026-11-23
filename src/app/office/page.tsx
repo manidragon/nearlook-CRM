@@ -54,7 +54,7 @@ export default function OfficePage() {
   const [activeTab, setActiveTab] = useState<'expenses' | 'staff'>('expenses');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [gstLiability, setGstLiability] = useState<number>(73917);
+  const [gstLiability, setGstLiability] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
   // Filters & Search
@@ -153,7 +153,7 @@ export default function OfficePage() {
       if (expRes.success) setExpenses(expRes.data);
       if (staffRes.success) setStaff(staffRes.data);
       if (metricsRes?.success && metricsRes?.data) {
-        setGstLiability(metricsRes.data.gstPayableThisMonth || 73917);
+        setGstLiability(metricsRes.data.gstPayableThisMonth ?? 0);
       }
     } catch (err) {
       console.error(err);

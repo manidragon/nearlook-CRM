@@ -434,7 +434,7 @@ export default function StaffPage() {
           email: staffForm.email,
           phone: staffForm.phone,
           address: staffForm.address,
-          monthlySalary: Number(staffForm.monthlySalary) || 45000,
+          monthlySalary: Number(staffForm.monthlySalary) || 0,
           hourlyRate: Number(staffForm.hourlyRate) || 1500,
           role: staffForm.role,
           team: staffForm.team,
@@ -510,7 +510,7 @@ export default function StaffPage() {
       `👤 Employee: *${member.name}* (${member.userId})\n` +
       `💼 Role: *${member.role.replace('_', ' ')}*\n` +
       `⏰ Shift: *${member.shiftTiming || '09:30 AM - 07:30 PM Standard'}*\n\n` +
-      `💰 *Gross Base Salary:* ₹${(member.monthlySalary || 45000).toLocaleString('en-IN')}\n` +
+      `💰 *Gross Base Salary:* ₹${(member.monthlySalary ?? 0).toLocaleString('en-IN')}\n` +
       `⚠️ *Unapproved Absences:* ${absentDays} days\n` +
       `🔻 *Total Statutory Deductions:* ₹${totalDeduction.toLocaleString('en-IN')}\n` +
       `---------------------------------\n` +
@@ -558,7 +558,7 @@ export default function StaffPage() {
       email: member.email || '',
       phone: member.phone || '',
       address: member.address || '',
-      monthlySalary: String(member.monthlySalary || 45000),
+      monthlySalary: String(member.monthlySalary ?? 0),
       hourlyRate: String(member.hourlyRate || 1500),
       role: member.role,
       team: member.team,
@@ -1259,7 +1259,7 @@ export default function StaffPage() {
                   <tbody className="divide-y divide-slate-100">
                     {staff.map((member) => {
                       const workingDays = calendar?.workingDaysCount || 26;
-                      const dailyRate = Math.round((member.monthlySalary || 45000) / workingDays);
+                      const dailyRate = Math.round((member.monthlySalary ?? 0) / workingDays);
 
                       // Calculate staff specific attendance from records
                       const memberRecords = attendanceRecords.filter(r => r.staffId === member.id);
@@ -1268,7 +1268,7 @@ export default function StaffPage() {
                       const preAppliedLeaves = memberRecords.filter(r => r.status === 'PRE_APPLIED_LEAVE').length;
 
                       const totalDeduction = Math.round((absentDays * dailyRate) + (halfDays * dailyRate * 0.5));
-                      const netPayable = Math.max(0, (member.monthlySalary || 45000) - totalDeduction);
+                      const netPayable = Math.max(0, (member.monthlySalary ?? 0) - totalDeduction);
 
                       return (
                         <tr key={member.id} className="hover:bg-orange-50/30 transition-colors">
@@ -1283,7 +1283,7 @@ export default function StaffPage() {
                             <div className="text-[10px] text-slate-500 mt-0.5">{TEAM_LABELS[member.team] || member.team}</div>
                           </td>
                           <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-900">
-                            ₹{(member.monthlySalary || 45000).toLocaleString('en-IN')}
+                            ₹{(member.monthlySalary ?? 0).toLocaleString('en-IN')}
                           </td>
                           <td className="py-3.5 px-4 text-center font-mono text-slate-600">
                             ₹{dailyRate.toLocaleString('en-IN')}
@@ -1373,7 +1373,7 @@ export default function StaffPage() {
                     {attendanceRecords.map((record) => {
                       const staffMember = staff.find(s => s.id === record.staffId);
                       const workingDays = calendar?.workingDaysCount || 26;
-                      const dailyRate = Math.round((staffMember?.monthlySalary || 45000) / workingDays);
+                      const dailyRate = Math.round((staffMember?.monthlySalary ?? 0) / workingDays);
                       let deductionText = '₹0';
                       let deductionClass = 'text-slate-500';
                       if (record.status === 'ABSENT') {
@@ -2452,19 +2452,19 @@ export default function StaffPage() {
                     <div className="p-3 text-xs space-y-2">
                       <div className="flex justify-between text-slate-600">
                         <span>Basic Salary (50%)</span>
-                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 45000) * 0.5).toLocaleString('en-IN')}</span>
+                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary ?? 0) * 0.5).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>House Rent Allowance (HRA 30%)</span>
-                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 45000) * 0.3).toLocaleString('en-IN')}</span>
+                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary ?? 0) * 0.3).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>Special Allowance & Tech Perks (20%)</span>
-                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 45000) * 0.2).toLocaleString('en-IN')}</span>
+                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary ?? 0) * 0.2).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="pt-2 border-t border-slate-100 flex justify-between font-bold text-slate-900">
                         <span>Total Gross Earnings</span>
-                        <span className="font-mono text-emerald-700">₹{(selectedSlipStaff.staff.monthlySalary || 45000).toLocaleString('en-IN')}</span>
+                        <span className="font-mono text-emerald-700">₹{(selectedSlipStaff.staff.monthlySalary ?? 0).toLocaleString('en-IN')}</span>
                       </div>
                     </div>
                   </div>
@@ -2479,13 +2479,13 @@ export default function StaffPage() {
                       <div className="flex justify-between text-slate-600">
                         <span>Unapproved Absences ({selectedSlipStaff.absentDays} days)</span>
                         <span className="font-mono font-semibold text-rose-600">
-                          -₹{Math.round(selectedSlipStaff.absentDays * ((selectedSlipStaff.staff.monthlySalary || 45000) / 30)).toLocaleString('en-IN')}
+                          -₹{Math.round(selectedSlipStaff.absentDays * ((selectedSlipStaff.staff.monthlySalary ?? 0) / 30)).toLocaleString('en-IN')}
                         </span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>Half-Days / Late Clock-ins ({selectedSlipStaff.halfDays})</span>
                         <span className="font-mono font-semibold text-rose-600">
-                          -₹{Math.round(selectedSlipStaff.halfDays * ((selectedSlipStaff.staff.monthlySalary || 45000) / 60)).toLocaleString('en-IN')}
+                          -₹{Math.round(selectedSlipStaff.halfDays * ((selectedSlipStaff.staff.monthlySalary ?? 0) / 60)).toLocaleString('en-IN')}
                         </span>
                       </div>
                       <div className="flex justify-between text-slate-600">
