@@ -60,8 +60,8 @@ let staffList: StaffMember[] = [
     email: 'alex@nearlook.com',
     phone: '+919876543202',
     address: '102 Indiranagar 100ft Rd, Bengaluru, KA',
-    monthlySalary: 85000,
-    hourlyRate: 2200,
+    monthlySalary: 0,
+    hourlyRate: 0,
     role: 'PROJECT_MANAGER',
     team: 'MANAGEMENT',
     status: 'ACTIVE',
@@ -82,8 +82,8 @@ let staffList: StaffMember[] = [
     email: 'maya@nearlook.com',
     phone: '+919876543205',
     address: '77 Koregaon Park, Pune, MH',
-    monthlySalary: 55000,
-    hourlyRate: 1600,
+    monthlySalary: 0,
+    hourlyRate: 0,
     role: 'DESIGNER',
     team: 'DESIGN',
     status: 'ACTIVE',
@@ -104,8 +104,8 @@ let staffList: StaffMember[] = [
     email: 'liam@nearlook.com',
     phone: '+919876543206',
     address: '54 Jubilee Hills, Hyderabad, TS',
-    monthlySalary: 50000,
-    hourlyRate: 1400,
+    monthlySalary: 0,
+    hourlyRate: 0,
     role: 'CONTENT_WRITER',
     team: 'CONTENT',
     status: 'ACTIVE',
@@ -199,38 +199,7 @@ let journalVouchersList: JournalVoucher[] = [];
 let leaveApplicationsList: LeaveApplication[] = [];
 let financialApprovalsList: FinancialApprovalItem[] = [];
 let clientDocumentsList: ClientDocument[] = [];
-let influencersList: Influencer[] = [
-  {
-    id: 'inf-1',
-    name: 'Arun Vlogs',
-    handle: '@tech_arun',
-    platform: 'Instagram',
-    phone: '+91 98450 12345',
-    email: 'arun.creators@gmail.com',
-    category: 'Technology & SaaS',
-    followersCount: '125K',
-    standardRate: 15000,
-    upiId: 'arunvlogs@oksbi',
-    status: 'ACTIVE',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    id: 'inf-2',
-    name: 'Priya Trends',
-    handle: '@priya_trends',
-    platform: 'Instagram',
-    phone: '+91 98765 43210',
-    email: 'priya.trends@gmail.com',
-    category: 'Lifestyle & E-Commerce',
-    followersCount: '240K',
-    standardRate: 25000,
-    upiId: 'priyatrends@okhdfcbank',
-    status: 'ACTIVE',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+let influencersList: Influencer[] = [];
 
 function moveToRecycleBin(
   originalId: string,
@@ -1245,180 +1214,6 @@ const rawDataService = {
 
   // Projects & Milestones Management (IT, Software Engineering, AI & Digital Agency Delivery)
   getProjects: () => {
-    let storeChanged = false;
-
-    // Ensure Prestige IoT Portal IT project exists
-    let prestigeProj = projectsList.find(p => p.code === 'PRJ-SOF-104' || p.id === 'proj-sof-104');
-    if (!prestigeProj) {
-      prestigeProj = {
-        id: 'proj-sof-104',
-        code: 'PRJ-SOF-104',
-        clientId: 'client-prestige',
-        clientName: 'Prestige Urban Developers Ltd',
-        clientPhone: '+91 98451 00223',
-        location: 'Bangalore / GCP Cloud',
-        category: 'ENTERPRISE CLOUD SAAS',
-        domain: 'SOFTWARE',
-        title: 'Prestige Urban - Smart Enterprise IoT Portal & Mobile App',
-        description: 'Cloud microservices, tenant mobile app, IoT telemetry dashboard and executive analytics.',
-        techStack: 'React Native, Next.js, Node.js, Fastify, Docker',
-        projectType: 'ONE_TIME_PROJECT',
-        contractType: 'Milestone Execution Contract',
-        status: 'PLANNING',
-        isAdvanceReceived: false,
-        advanceRequired: 400000,
-        totalValue: 1250000,
-        budget: 1050000,
-        billedAmount: 0,
-        collectedAmount: 0,
-        cashCollected: 0,
-        bankCollected: 0,
-        balanceDue: 1250000,
-        gstAmount: 0,
-        expensesTotal: 0,
-        progressPercent: 4,
-        startDate: '01 Sept 2024',
-        dueDate: '30 Jun 2026',
-        assignedLeadName: 'Alex Rivera (PM)',
-        milestones: [
-          { id: 'ms-prestige-1', title: 'Phase 1: Architecture Blueprint & Cloud Schema', deliverable: 'System design, Auth0 SSO and DB schema', amount: 350000, status: 'IN_PROGRESS' },
-          { id: 'ms-prestige-2', title: 'Phase 2: Microservices & Real-time IoT Ingestion', deliverable: 'FastAPI microservices and telemetry ingestion', amount: 500000, status: 'PENDING' },
-          { id: 'ms-prestige-3', title: 'Phase 3: React Native Mobile Apps & Handover', deliverable: 'iOS & Android App Store release and admin dashboard', amount: 400000, status: 'PENDING' }
-        ],
-        createdAt: '2026-09-01T09:00:00.000Z',
-        updatedAt: '2026-09-01T09:00:00.000Z'
-      };
-      projectsList.push(prestigeProj);
-      storeChanged = true;
-    } else {
-      if (prestigeProj.title.includes('Greenfield') || prestigeProj.title.includes('Tower B')) {
-        prestigeProj.title = 'Prestige Urban - Smart Enterprise IoT Portal & Mobile App';
-        prestigeProj.location = 'Bangalore / GCP Cloud';
-        prestigeProj.category = 'ENTERPRISE CLOUD SAAS';
-        prestigeProj.domain = 'SOFTWARE';
-        storeChanged = true;
-      }
-    }
-
-    // Ensure K-RIDE Transit Mobile App IT project exists
-    let krideProj = projectsList.find(p => p.code === 'PRJ-SOF-102' || p.id === 'proj-sof-102');
-    if (!krideProj) {
-      krideProj = {
-        id: 'proj-sof-102',
-        code: 'PRJ-SOF-102',
-        clientId: 'client-kride',
-        clientName: 'Karnataka Rail Infrastructure Development (K-RIDE)',
-        clientPhone: '+91 94480 33445',
-        location: 'Whitefield, Bangalore / Hybrid Cloud',
-        category: 'MOBILE APP & REALTIME API',
-        domain: 'SOFTWARE',
-        title: 'K-RIDE Transit - Automated Ticketing & Commuter Mobile App',
-        description: 'Real-time commuter transit app, QR ticketing engine, push notification microservice & admin dashboard.',
-        techStack: 'Flutter, Node.js, Redis, WebSockets, PostgreSQL',
-        projectType: 'ONE_TIME_PROJECT',
-        contractType: 'Government EPC Contract',
-        status: 'ACTIVE',
-        isAdvanceReceived: false,
-        advanceRequired: 350000,
-        totalValue: 850000,
-        budget: 700000,
-        billedAmount: 0,
-        collectedAmount: 0,
-        cashCollected: 0,
-        bankCollected: 0,
-        balanceDue: 850000,
-        gstAmount: 0,
-        expensesTotal: 0,
-        progressPercent: 22,
-        startDate: '01 Apr 2024',
-        dueDate: '31 Aug 2025',
-        assignedLeadName: 'Alex Rivera (PM)',
-        milestones: [
-          { id: 'ms-kride-1', title: 'Mobile UI/UX Wireframes & API Gateway Design', deliverable: 'Figma prototypes and OpenAPI specification', amount: 250000, status: 'COMPLETED' },
-          { id: 'ms-kride-2', title: 'QR Ticketing Engine & Payment Gateway Integration', deliverable: 'Razorpay / UPI split checkout & offline validation', amount: 350000, status: 'IN_PROGRESS' },
-          { id: 'ms-kride-3', title: 'Real-time GPS Tracking & Production Cloud Deployment', deliverable: 'WebSocket live feeds and high-availability cluster', amount: 250000, status: 'PENDING' }
-        ],
-        createdAt: '2024-04-01T09:00:00.000Z',
-        updatedAt: '2024-04-01T09:00:00.000Z'
-      };
-      projectsList.push(krideProj);
-      storeChanged = true;
-    } else {
-      if (krideProj.title.includes('Metro Station') || krideProj.title.includes('Skywalk')) {
-        krideProj.title = 'K-RIDE Transit - Automated Ticketing & Commuter Mobile App';
-        krideProj.location = 'Whitefield, Bangalore / Hybrid Cloud';
-        krideProj.category = 'MOBILE APP & REALTIME API';
-        krideProj.domain = 'SOFTWARE';
-        storeChanged = true;
-      }
-    }
-
-    // Ensure client Arun exists
-    if (!clientsList.some(c => c.id === 'client-arun')) {
-      clientsList.push({
-        id: 'client-arun',
-        businessName: 'Arun Enterprises',
-        contactName: 'Arun',
-        whatsappNumber: '+91 98450 99887',
-        email: 'arun@example.com',
-        city: 'Bangalore',
-        address: 'Indiranagar, Bangalore, Karnataka',
-        clientType: 'ONE_TIME_PROJECT',
-        status: 'ACTIVE',
-        monthlyRetainerAmount: 0,
-        billingCycleDay: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-      storeChanged = true;
-    }
-
-    // Ensure client Prestige exists
-    if (!clientsList.some(c => c.id === 'client-prestige')) {
-      clientsList.push({
-        id: 'client-prestige',
-        businessName: 'Prestige Urban Developers Ltd',
-        contactName: 'Sanjay Reddy',
-        whatsappNumber: '+91 98451 00223',
-        email: 'sanjay.reddy@prestigeurban.com',
-        city: 'Bangalore',
-        address: 'Outer Ring Road, Bellandur, Bangalore',
-        clientType: 'ONE_TIME_PROJECT',
-        status: 'ACTIVE',
-        monthlyRetainerAmount: 0,
-        billingCycleDay: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-      storeChanged = true;
-    }
-
-    // Ensure client K-RIDE exists
-    if (!clientsList.some(c => c.id === 'client-kride')) {
-      clientsList.push({
-        id: 'client-kride',
-        businessName: 'Karnataka Rail Infrastructure Development (K-RIDE)',
-        contactName: 'M. K. Rao (Chief Engineer)',
-        whatsappNumber: '+91 94480 33445',
-        email: 'procurement@kride.karnataka.gov.in',
-        city: 'Bangalore',
-        address: 'Whitefield Main Road, Near ITPL, Bangalore',
-        clientType: 'ONE_TIME_PROJECT',
-        status: 'ACTIVE',
-        monthlyRetainerAmount: 0,
-        billingCycleDay: 1,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-      storeChanged = true;
-    }
-
-
-
-    if (storeChanged) {
-      persistStore();
-    }
-
     return projectsList.map(proj => {
       const client = clientsList.find(c => c.id === proj.clientId);
       const projReceipts = receiptsList.filter(r => r.projectId === proj.id || (r.clientName && r.clientName.toLowerCase() === (proj.clientName || '').toLowerCase()));
@@ -3926,7 +3721,10 @@ const rawDataService = {
     financialApprovalsList.length = 0;
     clientDocumentsList.length = 0;
     chartOfAccountsList.forEach(acc => acc.balance = 0);
+    influencersList.length = 0;
     staffList.forEach(s => {
+      s.monthlySalary = 0;
+      s.hourlyRate = 0;
       s.activeTasksCount = 0;
       s.totalProjectsWorked = 0;
       s.overdueCount = 0;
