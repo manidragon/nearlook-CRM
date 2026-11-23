@@ -87,7 +87,7 @@ const TIME_SLOTS = [
 
 // Consistent staff color-coding & initials
 const STAFF_COLORS: Record<string, { bg: string; text: string; border: string; ring: string }> = {
-  'staff-1': { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300', ring: 'ring-purple-400' }, // Rachel Adams
+  'staff-1': { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300', ring: 'ring-purple-400' }, // Arun (Owner)
   'staff-2': { bg: 'bg-blue-100', text: 'text-blue-800', border: 'border-blue-300', ring: 'ring-blue-400' }, // Alex Rivera
   'staff-3': { bg: 'bg-cyan-100', text: 'text-cyan-800', border: 'border-cyan-300', ring: 'ring-cyan-400' }, // David Chen
   'staff-4': { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300', ring: 'ring-emerald-400' }, // Priya Sharma

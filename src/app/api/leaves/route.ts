@@ -57,8 +57,8 @@ export async function PATCH(req: Request) {
 
     const reviewer = reviewerStaff || {
       id: 'staff-1',
-      name: 'Rachel Adams',
-      role: 'ADMIN'
+      name: 'Arun',
+      role: 'OWNER'
     };
 
     const updated = DataService.reviewLeaveApplication(id, status, reviewer, reviewNotes);

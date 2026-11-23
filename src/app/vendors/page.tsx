@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { 
   Truck, 
   Plus, 
@@ -23,9 +24,14 @@ import {
   DollarSign,
   Phone,
   Mail,
-  Building
+  Building,
+  FolderKanban,
+  Users,
+  Sparkles,
+  ArrowUpRight,
+  Filter
 } from 'lucide-react';
-import { Vendor, VendorType } from '@/lib/types';
+import { Vendor, VendorType, Project, Influencer } from '@/lib/types';
 import { useAuth } from '@/lib/AuthContext';
 
 const formatINR = (val?: number) => {
@@ -36,16 +42,54 @@ const formatINR = (val?: number) => {
   }).format(val || 0);
 };
 
-export default function VendorsPage() {
+const DEFAULT_CATEGORIES = [
+  { id: 'DOMAIN_REGISTRATION', label: 'Domain Registration & DNS (Hostinger/GoDaddy)' },
+  { id: 'HOSTING_SERVERS', label: 'Cloud Servers & Hosting (AWS/Cloudways/Vercel)' },
+  { id: 'META_ADS_CAMPAIGN', label: 'Meta Ads & Instagram Campaigns' },
+  { id: 'GOOGLE_ADS_CAMPAIGN', label: 'Google & YouTube Ads Network' },
+  { id: 'INFLUENCER_MARKETING', label: 'Influencer Marketing & Creator Payables' },
+  { id: 'THIRD_PARTY_APIS', label: 'AI & API Quotas (OpenAI/Anthropic)' },
+  { id: 'SAAS_LICENSES', label: 'Software & Tool Subscriptions (Canva/GitHub)' },
+  { id: 'FREELANCE_DEV', label: 'Freelance Developers & UI Designers' },
+  { id: 'HARDWARE_OFFICE', label: 'Hardware & Office Equipment' },
+  { id: 'TEA_SNACKS', label: 'Pantry & Office Refreshments' },
+];
+
+const PLATFORM_SHORTCUTS = [
+  'Hostinger',
+  'Meta Ads',
+  'Google Ads',
+  'AWS Cloud',
+  'Cloudflare',
+  'OpenAI API',
+  'Canva Pro',
+  'DigitalOcean',
+  'Vercel',
+  'Razorpay Fees'
+];
+
+function VendorsContent() {
+  const searchParams = useSearchParams();
+  const queryProjectId = searchParams.get('projectId');
+  const queryOpenCreate = searchParams.get('openCreate');
+
   const { currentStaff, canViewFinancials } = useAuth();
 
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Dynamic Categories
+  const [categories, setCategories] = useState<{ id: string; label: string }[]>(DEFAULT_CATEGORIES);
+  const [showAddCategoryInput, setShowAddCategoryInput] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   // Filters & Search
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [projectFilter, setProjectFilter] = useState<string>(queryProjectId || 'ALL');
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -60,22 +104,34 @@ export default function VendorsPage() {
 
   // Form State
   const [formName, setFormName] = useState('');
+  const [formProjectId, setFormProjectId] = useState<string>(queryProjectId || '');
   const [formContact, setFormContact] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formEmail, setFormEmail] = useState('');
   const [formBankDetails, setFormBankDetails] = useState('');
   const [formVendorType, setFormVendorType] = useState<VendorType>('VENDOR');
-  const [formCategory, setFormCategory] = useState('HOSTING_SERVERS');
+  const [formCategory, setFormCategory] = useState('DOMAIN_REGISTRATION');
   const [formPlatform, setFormPlatform] = useState('Instagram');
   const [formFollowers, setFormFollowers] = useState('');
   const [formTotalPayable, setFormTotalPayable] = useState('');
   const [formAdvancePaid, setFormAdvancePaid] = useState('0');
   const [formDueDate, setFormDueDate] = useState('');
+  const [formExpenseMode, setFormExpenseMode] = useState('CREDIT_CARD');
+  const [formInvoiceNumber, setFormInvoiceNumber] = useState('');
+  const [formNotes, setFormNotes] = useState('');
+  const [selectedInfluencerId, setSelectedInfluencerId] = useState('');
 
   const loadData = async () => {
     try {
-      const res = await fetch('/api/vendors').then(r => r.json());
-      if (res.success) setVendors(res.data);
+      const [venRes, projRes, infRes] = await Promise.all([
+        fetch('/api/vendors').then(r => r.json()),
+        fetch('/api/projects').then(r => r.json()),
+        fetch('/api/influencers').then(r => r.json())
+      ]);
+
+      if (venRes.success) setVendors(venRes.data);
+      if (projRes.success) setProjects(projRes.data);
+      if (infRes.success) setInfluencers(infRes.data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -90,19 +146,36 @@ export default function VendorsPage() {
     return () => window.removeEventListener('crm-data-updated', handleUpdate);
   }, []);
 
+  // Handle URL openCreate
+  useEffect(() => {
+    if (queryOpenCreate === 'true') {
+      resetForm();
+      if (queryProjectId) {
+        setFormProjectId(queryProjectId);
+        setProjectFilter(queryProjectId);
+      }
+      setShowCreateModal(true);
+    }
+  }, [queryOpenCreate, queryProjectId]);
+
   const resetForm = () => {
     setFormName('');
+    setFormProjectId(queryProjectId || '');
     setFormContact('');
     setFormPhone('');
     setFormEmail('');
     setFormBankDetails('');
     setFormVendorType('VENDOR');
-    setFormCategory('HOSTING_SERVERS');
+    setFormCategory('DOMAIN_REGISTRATION');
     setFormPlatform('Instagram');
     setFormFollowers('');
     setFormTotalPayable('');
     setFormAdvancePaid('0');
     setFormDueDate(new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString().split('T')[0]);
+    setFormExpenseMode('CREDIT_CARD');
+    setFormInvoiceNumber('');
+    setFormNotes('');
+    setSelectedInfluencerId('');
   };
 
   const handleOpenCreateModal = () => {
@@ -113,8 +186,9 @@ export default function VendorsPage() {
   const handleOpenEditModal = (v: Vendor) => {
     setEditingVendor(v);
     setFormName(v.companyName);
+    setFormProjectId(v.projectId || '');
     setFormContact(v.contactPerson || '');
-    setFormPhone(v.phone);
+    setFormPhone(v.phone || '');
     setFormEmail(v.email || '');
     setFormBankDetails(v.bankDetails || '');
     setFormVendorType(v.vendorType || 'VENDOR');
@@ -124,40 +198,84 @@ export default function VendorsPage() {
     setFormTotalPayable(String(v.totalPayable));
     setFormAdvancePaid(String(v.advancePaid));
     setFormDueDate(v.dueDate || '');
+    setFormExpenseMode(v.paymentMode || 'CREDIT_CARD');
+    setFormInvoiceNumber(v.invoiceNumber || '');
+    setFormNotes(v.notes || '');
+    setSelectedInfluencerId(v.influencerId || '');
+  };
+
+  const handleAddCustomCategory = () => {
+    if (!newCategoryName.trim()) return;
+    const catId = newCategoryName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+    const newCat = { id: catId, label: newCategoryName.trim() };
+    setCategories(prev => [...prev, newCat]);
+    setFormCategory(catId);
+    setNewCategoryName('');
+    setShowAddCategoryInput(false);
+  };
+
+  const handleInfluencerSelect = (infId: string) => {
+    setSelectedInfluencerId(infId);
+    if (!infId) return;
+    const inf = influencers.find(i => i.id === infId);
+    if (inf) {
+      setFormName(`${inf.name} (@${inf.handle})`);
+      setFormContact(inf.name);
+      setFormPlatform(inf.platform);
+      setFormFollowers(inf.followersCount || '');
+      setFormPhone(inf.phone || '');
+      setFormEmail(inf.email || '');
+      setFormBankDetails(inf.bankDetails || inf.upiId || '');
+      setFormTotalPayable(String(inf.standardRate || ''));
+      setFormVendorType('INFLUENCER');
+      setFormCategory('INFLUENCER_MARKETING');
+    }
   };
 
   const handleSaveVendor = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName || !formPhone || !formTotalPayable) {
-      alert('Please fill in Name, Phone, and Total Payable');
+    if (!formName.trim() || !formTotalPayable) {
+      alert('Please fill in Partner / Platform Name and Total Payable Amount.');
       return;
     }
+
+    const selectedProj = projects.find(p => p.id === formProjectId);
+    const selectedInf = influencers.find(i => i.id === selectedInfluencerId);
+
+    const payload = {
+      companyName: formName.trim(),
+      projectId: formProjectId || undefined,
+      projectName: selectedProj ? selectedProj.title : undefined,
+      clientName: selectedProj ? selectedProj.clientName : undefined,
+      contactPerson: formContact,
+      phone: formPhone || undefined,
+      email: formEmail || undefined,
+      bankDetails: formBankDetails || undefined,
+      vendorType: formVendorType,
+      serviceCategory: formCategory,
+      platform: formPlatform,
+      followerCount: formFollowers,
+      influencerId: selectedInfluencerId || undefined,
+      influencerName: selectedInf ? selectedInf.name : undefined,
+      paymentMode: formExpenseMode,
+      invoiceNumber: formInvoiceNumber || undefined,
+      notes: formNotes || undefined,
+      totalPayable: Number(formTotalPayable),
+      advancePaid: Number(formAdvancePaid || 0),
+      balanceDue: Math.max(0, Number(formTotalPayable) - Number(formAdvancePaid || 0)),
+      dueDate: formDueDate || undefined
+    };
 
     try {
       if (editingVendor) {
         const res = await fetch('/api/vendors', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: editingVendor.id,
-            companyName: formName,
-            contactPerson: formContact,
-            phone: formPhone,
-            email: formEmail,
-            bankDetails: formBankDetails,
-            vendorType: formVendorType,
-            serviceCategory: formCategory,
-            platform: formPlatform,
-            followerCount: formFollowers,
-            totalPayable: Number(formTotalPayable),
-            advancePaid: Number(formAdvancePaid),
-            balanceDue: Math.max(0, Number(formTotalPayable) - Number(formAdvancePaid)),
-            dueDate: formDueDate
-          })
+          body: JSON.stringify({ id: editingVendor.id, ...payload })
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage(`✅ ${formVendorType === 'INFLUENCER' ? 'Influencer' : 'Vendor'} updated successfully.`);
+          setToastMessage(`✅ ${payload.companyName} expense updated successfully.`);
           setEditingVendor(null);
           loadData();
           window.dispatchEvent(new Event('crm-data-updated'));
@@ -166,24 +284,11 @@ export default function VendorsPage() {
         const res = await fetch('/api/vendors', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            companyName: formName,
-            contactPerson: formContact,
-            phone: formPhone,
-            email: formEmail,
-            bankDetails: formBankDetails,
-            vendorType: formVendorType,
-            serviceCategory: formCategory,
-            platform: formPlatform,
-            followerCount: formFollowers,
-            totalPayable: Number(formTotalPayable),
-            advancePaid: Number(formAdvancePaid),
-            dueDate: formDueDate
-          })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.success) {
-          setToastMessage(`✅ Added ${formName} to Vendor & Influencers.`);
+          setToastMessage(`✅ Added ${payload.companyName} to Project Expenses & Payables.`);
           setShowCreateModal(false);
           loadData();
           window.dispatchEvent(new Event('crm-data-updated'));
@@ -192,7 +297,7 @@ export default function VendorsPage() {
       setTimeout(() => setToastMessage(null), 4000);
     } catch (err) {
       console.error(err);
-      alert('Failed to save');
+      alert('Failed to save expense');
     }
   };
 
@@ -212,7 +317,7 @@ export default function VendorsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setToastMessage(`💰 Payment of ${formatINR(Number(paymentAmount))} recorded for ${payingVendor.companyName}. Balance updated!`);
+        setToastMessage(`💰 Payment of ${formatINR(Number(paymentAmount))} recorded for ${payingVendor.companyName}. Project balance updated!`);
         setPayingVendor(null);
         setPaymentAmount('');
         loadData();
@@ -232,7 +337,7 @@ export default function VendorsPage() {
       });
       const data = await res.json();
       if (data.success) {
-        setToastMessage(`🗑️ ${deletingVendor.companyName} moved to Recycle Bin.`);
+        setToastMessage(`🗑️ ${deletingVendor.companyName} expense moved to Recycle Bin.`);
         setDeletingVendor(null);
         loadData();
         window.dispatchEvent(new Event('crm-data-updated'));
@@ -248,6 +353,7 @@ export default function VendorsPage() {
     const matchesSearch = 
       v.companyName.toLowerCase().includes(search.toLowerCase()) ||
       (v.contactPerson && v.contactPerson.toLowerCase().includes(search.toLowerCase())) ||
+      (v.projectName && v.projectName.toLowerCase().includes(search.toLowerCase())) ||
       (v.phone && v.phone.includes(search)) ||
       (v.serviceCategory && v.serviceCategory.toLowerCase().includes(search.toLowerCase()));
 
@@ -257,19 +363,24 @@ export default function VendorsPage() {
       (statusFilter === 'PENDING' && v.balanceDue > 0) || 
       (statusFilter === 'SETTLED' && v.balanceDue <= 0);
 
-    return matchesSearch && matchesType && matchesStatus;
+    const matchesProject = 
+      projectFilter === 'ALL' || 
+      (projectFilter === 'GENERAL' && !v.projectId) ||
+      (v.projectId === projectFilter);
+
+    return matchesSearch && matchesType && matchesStatus && matchesProject;
   });
 
-  const totalContracted = vendors.reduce((acc, v) => acc + (v.totalPayable || 0), 0);
-  const totalPaid = vendors.reduce((acc, v) => acc + (v.advancePaid || 0), 0);
-  const totalBalanceDue = vendors.reduce((acc, v) => acc + (v.balanceDue || 0), 0);
-  const pendingCount = vendors.filter(v => (v.balanceDue || 0) > 0).length;
+  const totalContracted = filtered.reduce((acc, v) => acc + (v.totalPayable || 0), 0);
+  const totalPaid = filtered.reduce((acc, v) => acc + (v.advancePaid || 0), 0);
+  const totalBalanceDue = filtered.reduce((acc, v) => acc + (v.balanceDue || 0), 0);
+  const pendingCount = filtered.filter(v => (v.balanceDue || 0) > 0).length;
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
         <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm text-slate-500 font-medium">Loading Vendor & Influencer Payables...</p>
+        <p className="text-sm text-slate-500 font-medium">Loading Project Expenses & Payables...</p>
       </div>
     );
   }
@@ -281,24 +392,33 @@ export default function VendorsPage() {
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-              Vendor & Influencers Commercial Payables
+              Project Expenses & Vendor Payables
             </h1>
-            <span className="bg-rose-100 text-rose-800 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-rose-300">
-              Procurement & Creators
+            <span className="bg-amber-100 text-amber-900 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-amber-300">
+              Project Expenses & Procurement
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Liabilities and payments management for Cloud/AWS hosting, domain registrars, hardware suppliers, freelance developers, and marketing influencers.
+            Allocate domain purchases, Meta/Google ad networks, cloud servers, software tools, and creator fees directly to client projects and agency overhead.
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="flex items-center space-x-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-xs shadow-md shadow-amber-500/20 transition-all self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Vendor / Influencer</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <Link
+            href="/influencers"
+            className="flex items-center space-x-1.5 px-3.5 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl font-bold text-xs transition"
+          >
+            <Users className="w-4 h-4 text-purple-600" />
+            <span>Influencer Directory</span>
+          </Link>
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex items-center space-x-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-xl font-bold text-xs shadow-md shadow-amber-500/20 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>+ Add Project Expense</span>
+          </button>
+        </div>
       </div>
 
       {toastMessage && (
@@ -312,7 +432,7 @@ export default function VendorsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Total Payable Contracted</span>
+            <span>Total Expense Contracted</span>
             <DollarSign className="w-4 h-4 text-slate-500" />
           </div>
           <p className="text-xl font-black text-slate-900 mt-2">{formatINR(totalContracted)}</p>
@@ -324,22 +444,22 @@ export default function VendorsPage() {
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
             <span>Total Disbursed / Paid</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <p className="text-xl font-black text-emerald-600 mt-2">{formatINR(totalPaid)}</p>
           <div className="text-[11px] text-slate-500 mt-1">
-            <span>Settled through bank / UPI</span>
+            <span>Settled through Bank / UPI / Cards</span>
           </div>
         </div>
 
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
             <span>Balance Due (Outstanding)</span>
-            <AlertTriangle className="w-4 h-4 text-rose-600" />
+            <AlertTriangle className="w-4 h-4 text-rose-500" />
           </div>
           <p className="text-xl font-black text-rose-600 mt-2">{formatINR(totalBalanceDue)}</p>
           <div className="text-[11px] text-rose-600 font-semibold mt-1">
-            <span>Flows into Dashboard Payables</span>
+            <span>Flows into Project & Agency Payables</span>
           </div>
         </div>
 
@@ -350,69 +470,87 @@ export default function VendorsPage() {
           </div>
           <p className="text-xl font-black text-amber-600 mt-2">{pendingCount}</p>
           <div className="text-[11px] text-slate-500 mt-1">
-            <span>Vendors & Influencers with due</span>
+            <span>Expenses with due balance</span>
           </div>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search vendor name, influencer handle, phone, category..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center space-x-1.5">
-            <span className="text-[11px] font-bold text-slate-500 uppercase">Entity:</span>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              aria-label="Filter by partner entity"
-              className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
-            >
-              <option value="ALL">All Partners</option>
-              <option value="VENDOR">Tech Infrastructure Vendors</option>
-              <option value="INFLUENCER">Social Media Influencers</option>
-              <option value="FREELANCER">Freelance Engineers</option>
-            </select>
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search vendor name, platform, project, category, handle..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
           </div>
 
-          <div className="flex items-center space-x-1.5">
-            <span className="text-[11px] font-bold text-slate-500 uppercase">Status:</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Filter by payout status"
-              className="bg-slate-50 border border-slate-200 text-slate-800 text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-500"
-            >
-              <option value="ALL">All Payouts</option>
-              <option value="PENDING">Pending Dues Only</option>
-              <option value="SETTLED">Fully Settled</option>
-            </select>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Project Filter */}
+            <div className="flex items-center space-x-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+              <FolderKanban className="w-3.5 h-3.5 text-slate-500" />
+              <select
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none max-w-[170px] truncate"
+              >
+                <option value="ALL">All Projects & General</option>
+                <option value="GENERAL">General Agency Overhead</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.title}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Entity Filter */}
+            <div className="flex items-center space-x-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Type:</span>
+              <select
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none"
+              >
+                <option value="ALL">All Types</option>
+                <option value="VENDOR">Vendors / Platforms</option>
+                <option value="INFLUENCER">Influencers</option>
+                <option value="FREELANCER">Freelancers</option>
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center space-x-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200">
+              <span className="text-[10px] uppercase font-bold text-slate-400">Status:</span>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="bg-transparent text-xs font-bold text-slate-700 focus:outline-none"
+              >
+                <option value="ALL">All Payouts</option>
+                <option value="PENDING">Pending Due Balance</option>
+                <option value="SETTLED">Settled (₹0 Due)</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Vendors Table */}
+      {/* Expenses & Vendors Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold tracking-wider">
               <tr>
-                <th className="py-3 px-4">Partner & Handle</th>
-                <th className="py-3 px-4">Type</th>
+                <th className="py-3 px-4">Partner / Platform</th>
+                <th className="py-3 px-4">Associated Project</th>
                 <th className="py-3 px-4">Category</th>
-                <th className="py-3 px-4 text-right">Total Committed</th>
-                <th className="py-3 px-4 text-right">Disbursed Amount</th>
+                <th className="py-3 px-4 text-right">Committed</th>
+                <th className="py-3 px-4 text-right">Disbursed</th>
                 <th className="py-3 px-4 text-right">Balance Due</th>
-                <th className="py-3 px-4 text-center">Due Date</th>
+                <th className="py-3 px-4 text-center">Payment Mode</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -420,7 +558,7 @@ export default function VendorsPage() {
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-slate-400">
-                    No vendor or influencer records found.
+                    No expense or vendor records found for this filter.
                   </td>
                 </tr>
               ) : (
@@ -431,42 +569,61 @@ export default function VendorsPage() {
                       <td className="py-3.5 px-4">
                         <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
                           <span>{v.companyName}</span>
-                          {v.followerCount && (
+                          {v.vendorType === 'INFLUENCER' && (
                             <span className="text-[9px] font-bold px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded">
+                              Creator
+                            </span>
+                          )}
+                          {v.followerCount && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded">
                               {v.followerCount}
                             </span>
                           )}
                         </div>
                         <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          {v.contactPerson ? `${v.contactPerson} • ` : ''}{v.phone}
+                          {v.contactPerson ? `${v.contactPerson}` : ''}
+                          {v.phone ? ` • ${v.phone}` : ''}
                         </div>
                       </td>
+
                       <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          v.vendorType === 'INFLUENCER' 
-                            ? 'bg-purple-100 text-purple-800 border border-purple-200' 
-                            : v.vendorType === 'FREELANCER'
-                              ? 'bg-blue-100 text-blue-800 border border-blue-200'
-                              : 'bg-slate-100 text-slate-800 border border-slate-200'
-                        }`}>
-                          {v.vendorType || 'VENDOR'}
-                        </span>
+                        {v.projectId ? (
+                          <Link 
+                            href={`/projects?viewProjectId=${v.projectId}`}
+                            className="inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition max-w-[160px] truncate"
+                          >
+                            <FolderKanban className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{v.projectName || 'Project'}</span>
+                          </Link>
+                        ) : (
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                            Agency Overhead
+                          </span>
+                        )}
                       </td>
+
                       <td className="py-3.5 px-4 font-mono text-[11px] text-slate-600">
                         {v.serviceCategory.replace(/_/g, ' ')}
                       </td>
+
                       <td className="py-3.5 px-4 text-right font-black text-slate-900">
                         {formatINR(v.totalPayable)}
                       </td>
+
                       <td className="py-3.5 px-4 text-right font-bold text-emerald-600">
                         {formatINR(v.advancePaid)}
                       </td>
+
                       <td className="py-3.5 px-4 text-right font-black text-rose-600">
                         {formatINR(v.balanceDue)}
                       </td>
-                      <td className="py-3.5 px-4 text-center font-mono text-[11px] text-slate-500">
-                        {v.dueDate || 'Immediate'}
+
+                      <td className="py-3.5 px-4 text-center">
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-[10px] font-bold">
+                          {v.paymentMode ? v.paymentMode.replace(/_/g, ' ') : 'Corporate Card'}
+                        </span>
                       </td>
+
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end space-x-1.5">
                           {!isSettled && (
@@ -532,6 +689,13 @@ export default function VendorsPage() {
                   <span className="font-black text-rose-700 text-sm">{formatINR(payingVendor.balanceDue)}</span>
                 </div>
 
+                {payingVendor.projectName && (
+                  <div className="p-2.5 bg-blue-50 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-center space-x-1.5">
+                    <FolderKanban className="w-4 h-4 text-blue-600" />
+                    <span>Project: <strong>{payingVendor.projectName}</strong></span>
+                  </div>
+                )}
+
                 {payingVendor.bankDetails && (
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px]">
                     <span className="font-bold text-slate-500 block">Bank / UPI Transfer Details:</span>
@@ -554,7 +718,7 @@ export default function VendorsPage() {
                   />
                   {Number(paymentAmount) > payingVendor.balanceDue && (
                     <p className="text-[11px] text-amber-700 mt-1 font-semibold">
-                      ⚠️ Note: Amount exceeds balance due. Excess of {formatINR(Number(paymentAmount) - payingVendor.balanceDue)} will be logged as Advance Credit to Vendor.
+                      ⚠️ Note: Amount exceeds balance due. Excess will be logged as Advance Credit.
                     </p>
                   )}
                 </div>
@@ -566,10 +730,11 @@ export default function VendorsPage() {
                     onChange={(e) => setPaymentMode(e.target.value)}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
-                    <option value="NEFT_RTGS">Bank Transfer (NEFT / RTGS / IMPS)</option>
-                    <option value="UPI">UPI Transfer</option>
                     <option value="CREDIT_CARD">Company Corporate Card</option>
+                    <option value="UPI">UPI Transfer (GPay / PhonePe)</option>
+                    <option value="NEFT_RTGS">Bank Transfer (NEFT / RTGS / IMPS)</option>
                     <option value="CHEQUE">Cheque</option>
+                    <option value="CASH">Cash</option>
                   </select>
                 </div>
 
@@ -577,7 +742,7 @@ export default function VendorsPage() {
                   <label className="block text-xs font-bold text-slate-700 mb-1">Notes / Transaction Reference</label>
                   <input
                     type="text"
-                    placeholder="e.g. UTR / Transaction ID #10294829"
+                    placeholder="e.g. UTR #10294829 or Card Auth Code"
                     value={paymentNotes}
                     onChange={(e) => setPaymentNotes(e.target.value)}
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -606,16 +771,16 @@ export default function VendorsPage() {
       )}
 
       {/* =========================================================================
-          CREATE / EDIT MODAL
+          CREATE / EDIT EXPENSE & VENDOR MODAL
          ========================================================================= */}
       {(showCreateModal || editingVendor) && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 flex flex-col max-h-[92vh] overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
               <div className="flex items-center space-x-2">
                 <Truck className="w-5 h-5 text-amber-500" />
                 <h3 className="font-black text-lg text-slate-900">
-                  {editingVendor ? 'Edit Partner' : 'Add Vendor or Influencer'}
+                  {editingVendor ? 'Edit Project Expense / Vendor' : 'Add Project Expense & Procurement'}
                 </h3>
               </div>
               <button
@@ -628,118 +793,196 @@ export default function VendorsPage() {
 
             <form onSubmit={handleSaveVendor} className="flex flex-col flex-1 min-h-0 overflow-hidden">
               <div className="overflow-y-auto flex-1 p-6 space-y-4">
+                
+                {/* Associated Project */}
+                <div className="p-3.5 bg-blue-50/60 rounded-xl border border-blue-200/80">
+                  <label className="block text-xs font-bold text-blue-900 mb-1 flex items-center space-x-1.5">
+                    <FolderKanban className="w-4 h-4 text-blue-600" />
+                    <span>Associate with Project (Allocates Expense to Project Ledger)</span>
+                  </label>
+                  <select
+                    value={formProjectId}
+                    onChange={(e) => setFormProjectId(e.target.value)}
+                    className="w-full p-2.5 bg-white border border-blue-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- General Agency Expense (No Specific Project) --</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.title} (Client: {p.clientName})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-blue-700/80 mt-1">
+                    Attaching to a project automatically updates its Overall Expenses and Realized Net Profit margin.
+                  </p>
+                </div>
+
+                {/* Quick Platform Shortcuts */}
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1.5">
+                    Quick Platforms / Suggestions:
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {PLATFORM_SHORTCUTS.map(plat => (
+                      <button
+                        type="button"
+                        key={plat}
+                        onClick={() => {
+                          setFormName(plat);
+                          if (plat === 'Hostinger') setFormCategory('DOMAIN_REGISTRATION');
+                          if (plat === 'Meta Ads') setFormCategory('META_ADS_CAMPAIGN');
+                          if (plat === 'Google Ads') setFormCategory('GOOGLE_ADS_CAMPAIGN');
+                          if (plat === 'AWS Cloud') setFormCategory('HOSTING_SERVERS');
+                          if (plat === 'OpenAI API') setFormCategory('THIRD_PARTY_APIS');
+                          if (plat === 'Canva Pro') setFormCategory('SAAS_LICENSES');
+                        }}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-amber-100 hover:text-amber-900 text-slate-700 rounded-lg text-[10px] font-bold transition border border-slate-200/60"
+                      >
+                        + {plat}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Partner / Creator / Company Name *</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Platform / Vendor / Recipient Name *
+                    </label>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Cloudways Infrastructure, @tech_aarav, OpenAI"
+                      placeholder="e.g. Hostinger, Meta Ads, AWS Cloud, OpenAI, @tech_creator"
                       value={formName}
                       onChange={(e) => setFormName(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Entity Type *</label>
-                    <select
-                      value={formVendorType}
-                      onChange={(e) => setFormVendorType(e.target.value as any)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="VENDOR">Tech Infrastructure Vendor</option>
-                      <option value="INFLUENCER">Social Media Influencer</option>
-                      <option value="FREELANCER">Freelance Developer / Specialist</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Service Category *</label>
-                    <select
-                      value={formCategory}
-                      onChange={(e) => setFormCategory(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    >
-                      <option value="HOSTING_SERVERS">Cloud Servers & Hosting (AWS/Cloudways)</option>
-                      <option value="DOMAIN_REGISTRATION">Domain Registrars & DNS</option>
-                      <option value="INFLUENCER_PAYOUT">Influencer Sponsored Campaign</option>
-                      <option value="FREELANCER">Freelance AI / Software Dev</option>
-                      <option value="PURCHASES_HARDWARE">Hardware & Monitors</option>
-                      <option value="SAAS_TOOL">API & SaaS Licenses</option>
-                      <option value="TEA_SNACKS">Office Refreshments & Pantry</option>
-                    </select>
-                  </div>
-
-                  {formVendorType === 'INFLUENCER' && (
-                    <>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">Platform</label>
-                        <select
-                          value={formPlatform}
-                          onChange={(e) => setFormPlatform(e.target.value)}
-                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        >
-                          <option value="Instagram">Instagram</option>
-                          <option value="YouTube">YouTube</option>
-                          <option value="LinkedIn">LinkedIn</option>
-                          <option value="X">X (Twitter)</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-slate-700 mb-1">Follower Count</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. 280K, 1.2M"
-                          value={formFollowers}
-                          onChange={(e) => setFormFollowers(e.target.value)}
-                          className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Contact Person</label>
-                    <input
-                      type="text"
-                      value={formContact}
-                      onChange={(e) => setFormContact(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Phone / WhatsApp *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formPhone}
-                      onChange={(e) => setFormPhone(e.target.value)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Total Payable (₹) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={formTotalPayable}
-                      onChange={(e) => setFormTotalPayable(e.target.value)}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
 
+                  {/* Expense Type / Category Dropdown with "+ Add Expense Type" button */}
+                  <div className="sm:col-span-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-slate-700">Expense Type / Category *</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddCategoryInput(!showAddCategoryInput)}
+                        className="text-[11px] font-bold text-amber-600 hover:text-amber-700 flex items-center space-x-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add New Expense Type</span>
+                      </button>
+                    </div>
+
+                    {showAddCategoryInput && (
+                      <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex gap-2 items-center">
+                        <input
+                          type="text"
+                          placeholder="e.g. Domain SSL, Influencer Reel, Cloud Backup..."
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          className="flex-1 p-2 bg-white border border-amber-300 rounded-lg text-xs"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddCustomCategory}
+                          className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-lg shadow-sm"
+                        >
+                          Save Type
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddCategoryInput(false)}
+                          className="px-2 py-2 text-slate-400 hover:text-slate-600 text-xs"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
+
+                    <select
+                      value={formCategory}
+                      onChange={(e) => {
+                        setFormCategory(e.target.value);
+                        if (e.target.value === 'INFLUENCER_MARKETING') {
+                          setFormVendorType('INFLUENCER');
+                        }
+                      }}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      {categories.map(c => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Influencer Dropdown if category or type is influencer */}
+                  {(formCategory === 'INFLUENCER_MARKETING' || formVendorType === 'INFLUENCER') && (
+                    <div className="sm:col-span-2 p-3 bg-purple-50 rounded-xl border border-purple-200 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-purple-900 flex items-center space-x-1.5">
+                          <Users className="w-4 h-4 text-purple-600" />
+                          <span>Select Existing Creator / Influencer:</span>
+                        </label>
+                        <Link 
+                          href="/influencers" 
+                          target="_blank"
+                          className="text-[11px] font-bold text-purple-700 hover:underline flex items-center space-x-0.5"
+                        >
+                          <span>Manage Directory</span>
+                          <ArrowUpRight className="w-3 h-3" />
+                        </Link>
+                      </div>
+
+                      <select
+                        value={selectedInfluencerId}
+                        onChange={(e) => handleInfluencerSelect(e.target.value)}
+                        className="w-full p-2 bg-white border border-purple-300 rounded-lg text-xs font-bold text-purple-900"
+                      >
+                        <option value="">-- Choose Influencer from Directory --</option>
+                        {influencers.map(inf => (
+                          <option key={inf.id} value={inf.id}>
+                            {inf.name} (@{inf.handle}) • {inf.platform} • {inf.followersCount || '0'} followers • Standard ₹{inf.standardRate}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Disbursed Amount (₹)</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Total Expense Amount (₹) *</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="e.g. 4000"
+                      value={formTotalPayable}
+                      onChange={(e) => setFormTotalPayable(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Disbursed / Paid So Far (₹)</label>
                     <input
                       type="number"
                       value={formAdvancePaid}
                       onChange={(e) => setFormAdvancePaid(e.target.value)}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Payment Mode</label>
+                    <select
+                      value={formExpenseMode}
+                      onChange={(e) => setFormExpenseMode(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="CREDIT_CARD">Company Credit Card / Debit Card</option>
+                      <option value="UPI">UPI (GPay / PhonePe / Paytm)</option>
+                      <option value="NEFT_RTGS">Bank Transfer (NEFT / RTGS / IMPS)</option>
+                      <option value="DIRECT_DEBIT">Auto-Debit / Standing Instruction</option>
+                      <option value="CASH">Cash</option>
+                    </select>
                   </div>
 
                   <div>
@@ -752,24 +995,52 @@ export default function VendorsPage() {
                     />
                   </div>
 
+                  {/* Phone is NOT mandatory */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Email</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Contact Phone (Optional)
+                    </label>
                     <input
-                      type="email"
-                      value={formEmail}
-                      onChange={(e) => setFormEmail(e.target.value)}
+                      type="text"
+                      placeholder="e.g. +91 98765 43210 (Optional)"
+                      value={formPhone}
+                      onChange={(e) => setFormPhone(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Invoice / Transaction ID (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. INV-HOST-2026-09"
+                      value={formInvoiceNumber}
+                      onChange={(e) => setFormInvoiceNumber(e.target.value)}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Bank Details / UPI ID</label>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Bank / UPI / Payment Details (Optional)</label>
                     <input
                       type="text"
-                      placeholder="e.g. HDFC Bank A/C: ... or UPI: handle@okhdfcbank"
+                      placeholder="e.g. UPI ID or HDFC Bank Account"
                       value={formBankDetails}
                       onChange={(e) => setFormBankDetails(e.target.value)}
                       className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Notes / Description (Optional)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Purchased 1-year .com domain renewal for client web build"
+                      value={formNotes}
+                      onChange={(e) => setFormNotes(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
                 </div>
@@ -787,7 +1058,7 @@ export default function VendorsPage() {
                   type="submit"
                   className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-amber-500/20"
                 >
-                  {editingVendor ? 'Save Changes' : 'Add Partner'}
+                  {editingVendor ? 'Save Changes' : 'Record Project Expense'}
                 </button>
               </div>
             </form>
@@ -807,9 +1078,10 @@ export default function VendorsPage() {
                   {viewingVendor.vendorType || 'VENDOR'}
                 </span>
                 <h3 className="font-black text-xl text-slate-900 mt-1">{viewingVendor.companyName}</h3>
-                {viewingVendor.followerCount && (
-                  <span className="text-xs font-bold text-purple-700">
-                    {viewingVendor.platform}: {viewingVendor.followerCount} Followers
+                {viewingVendor.projectName && (
+                  <span className="text-xs font-bold text-blue-700 flex items-center space-x-1 mt-0.5">
+                    <FolderKanban className="w-3.5 h-3.5" />
+                    <span>Project: {viewingVendor.projectName}</span>
                   </span>
                 )}
               </div>
@@ -825,7 +1097,7 @@ export default function VendorsPage() {
                   <span className="text-sm font-black text-slate-900">{formatINR(viewingVendor.totalPayable)}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-emerald-600 uppercase font-bold block">Disbursed Amount</span>
+                  <span className="text-[10px] text-emerald-600 uppercase font-bold block">Disbursed</span>
                   <span className="text-sm font-black text-emerald-600">{formatINR(viewingVendor.advancePaid)}</span>
                 </div>
                 <div>
@@ -834,32 +1106,37 @@ export default function VendorsPage() {
                 </div>
               </div>
 
-              {viewingVendor.advanceCredit && viewingVendor.advanceCredit > 0 && (
-                <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 flex justify-between items-center text-xs text-purple-900 font-bold">
-                  <span>Advance Credit to Vendor (Excess Disbursed):</span>
-                  <span className="font-mono text-sm">{formatINR(viewingVendor.advanceCredit)}</span>
-                </div>
-              )}
-
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between py-1 border-b border-slate-100">
                   <span className="text-slate-500 font-bold">Category:</span>
                   <span className="font-mono text-slate-800">{viewingVendor.serviceCategory.replace(/_/g, ' ')}</span>
                 </div>
                 <div className="flex justify-between py-1 border-b border-slate-100">
-                  <span className="text-slate-500 font-bold">Phone:</span>
-                  <span className="font-mono text-slate-800">{viewingVendor.phone}</span>
+                  <span className="text-slate-500 font-bold">Payment Mode:</span>
+                  <span className="font-mono text-slate-800">{viewingVendor.paymentMode || 'Credit Card'}</span>
                 </div>
-                {viewingVendor.email && (
+                {viewingVendor.invoiceNumber && (
                   <div className="flex justify-between py-1 border-b border-slate-100">
-                    <span className="text-slate-500 font-bold">Email:</span>
-                    <span className="text-slate-800">{viewingVendor.email}</span>
+                    <span className="text-slate-500 font-bold">Invoice / Ref:</span>
+                    <span className="font-mono text-slate-800">{viewingVendor.invoiceNumber}</span>
+                  </div>
+                )}
+                {viewingVendor.phone && (
+                  <div className="flex justify-between py-1 border-b border-slate-100">
+                    <span className="text-slate-500 font-bold">Phone:</span>
+                    <span className="font-mono text-slate-800">{viewingVendor.phone}</span>
                   </div>
                 )}
                 {viewingVendor.bankDetails && (
                   <div className="py-1">
                     <span className="text-slate-500 font-bold block mb-1">Bank / UPI:</span>
                     <p className="p-2 bg-slate-50 rounded font-mono text-slate-800">{viewingVendor.bankDetails}</p>
+                  </div>
+                )}
+                {viewingVendor.notes && (
+                  <div className="py-1">
+                    <span className="text-slate-500 font-bold block mb-1">Notes:</span>
+                    <p className="p-2 bg-slate-50 rounded text-slate-800">{viewingVendor.notes}</p>
                   </div>
                 )}
               </div>
@@ -888,7 +1165,7 @@ export default function VendorsPage() {
             </div>
             <h3 className="font-black text-lg text-slate-900 mb-1">Move to Recycle Bin?</h3>
             <p className="text-xs text-slate-500 mb-4">
-              Are you sure you want to delete <strong className="text-slate-800">{deletingVendor.companyName}</strong>? Dashboard payables will automatically subtract this balance. It can be restored anytime with a new ID number.
+              Are you sure you want to delete <strong className="text-slate-800">{deletingVendor.companyName}</strong>? Associated project expenses will be adjusted accordingly.
             </p>
             <div className="flex items-center justify-end space-x-3">
               <button
@@ -911,3 +1188,14 @@ export default function VendorsPage() {
   );
 }
 
+export default function VendorsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    }>
+      <VendorsContent />
+    </Suspense>
+  );
+}

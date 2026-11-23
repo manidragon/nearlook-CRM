@@ -8,13 +8,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   try {
     const { id } = params;
     const body = await req.json();
-    const { name, url, notes, fileSize } = body;
+    const { name, url, dataUrl, notes, fileSize } = body;
 
-    if (!name || !url) {
-      return NextResponse.json({ success: false, error: 'File name and file URL are required' }, { status: 400 });
+    if (!name || (!url && !dataUrl)) {
+      return NextResponse.json({ success: false, error: 'File name and file URL or photo upload are required' }, { status: 400 });
     }
 
-    const proof = DataService.addTaskProofFile(id, { name, url, notes, fileSize });
+    const proof = DataService.addTaskProofFile(id, { name, url: url || dataUrl, dataUrl, notes, fileSize });
     if (!proof) return NextResponse.json({ success: false, error: 'Task not found' }, { status: 404 });
 
     return NextResponse.json({ success: true, data: proof });

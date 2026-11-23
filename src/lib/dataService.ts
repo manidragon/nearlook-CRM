@@ -7,7 +7,7 @@ import {
   DailyReport, ITInventoryItem, AccountHead, JournalVoucher, JournalLine, ExpenseCategory,
   InvoicePaymentInstallment, InvoiceStatus, LeaveApplication, LeaveType, LeaveStatus,
   FinancialApprovalItem, FinancialApprovalType, FinancialApprovalStatus, ClientDocument,
-  ClientDocCategory, TaskProofFile
+  ClientDocCategory, TaskProofFile, Influencer
 } from './types';
 import { encryptCredential, decryptCredential } from './crypto';
 import {
@@ -49,9 +49,75 @@ export function getFinancialYearSuffix(date: Date = new Date()): string {
   return String(fyStartYear % 100).padStart(2, '0');
 }
 
-// Clean Admin Profile with ₹0 Salary (Zero Mock Staff)
+// Pre-seeded Staff with Login Credentials, Salaries & Documents (Configured for team assignment)
 let staffList: StaffMember[] = [
-  ...DEMO_PROFILES
+  ...DEMO_PROFILES,
+  {
+    id: 'staff-2',
+    userId: 'STF-105',
+    password: 'Alex#PM2026!',
+    name: 'Alex Rivera',
+    email: 'alex@nearlook.com',
+    phone: '+919876543202',
+    address: '102 Indiranagar 100ft Rd, Bengaluru, KA',
+    monthlySalary: 85000,
+    hourlyRate: 2200,
+    role: 'PROJECT_MANAGER',
+    team: 'MANAGEMENT',
+    status: 'ACTIVE',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+    activeTasksCount: 0,
+    totalProjectsWorked: 0,
+    onTimeCompletionRate: 100,
+    overdueCount: 0,
+    salaryPaidDate: 'Pending Cycle',
+    isSalaryOverdue: false,
+    documents: []
+  },
+  {
+    id: 'staff-5',
+    userId: 'STF-106',
+    password: 'Maya#Design2026!',
+    name: 'Maya Lin',
+    email: 'maya@nearlook.com',
+    phone: '+919876543205',
+    address: '77 Koregaon Park, Pune, MH',
+    monthlySalary: 55000,
+    hourlyRate: 1600,
+    role: 'DESIGNER',
+    team: 'DESIGN',
+    status: 'ACTIVE',
+    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150',
+    activeTasksCount: 0,
+    totalProjectsWorked: 0,
+    onTimeCompletionRate: 100,
+    overdueCount: 0,
+    salaryPaidDate: 'Pending Cycle',
+    isSalaryOverdue: false,
+    documents: []
+  },
+  {
+    id: 'staff-6',
+    userId: 'STF-107',
+    password: 'Liam#Content2026!',
+    name: 'Liam O\'Connor',
+    email: 'liam@nearlook.com',
+    phone: '+919876543206',
+    address: '54 Jubilee Hills, Hyderabad, TS',
+    monthlySalary: 50000,
+    hourlyRate: 1400,
+    role: 'CONTENT_WRITER',
+    team: 'CONTENT',
+    status: 'ACTIVE',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150',
+    activeTasksCount: 0,
+    totalProjectsWorked: 0,
+    onTimeCompletionRate: 100,
+    overdueCount: 0,
+    salaryPaidDate: 'Pending Cycle',
+    isSalaryOverdue: false,
+    documents: []
+  }
 ];
 
 // Clean Live Lists (Fresh Start - Zero Mock Entry Data)
@@ -133,6 +199,38 @@ let journalVouchersList: JournalVoucher[] = [];
 let leaveApplicationsList: LeaveApplication[] = [];
 let financialApprovalsList: FinancialApprovalItem[] = [];
 let clientDocumentsList: ClientDocument[] = [];
+let influencersList: Influencer[] = [
+  {
+    id: 'inf-1',
+    name: 'Arun Vlogs',
+    handle: '@tech_arun',
+    platform: 'Instagram',
+    phone: '+91 98450 12345',
+    email: 'arun.creators@gmail.com',
+    category: 'Technology & SaaS',
+    followersCount: '125K',
+    standardRate: 15000,
+    upiId: 'arunvlogs@oksbi',
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'inf-2',
+    name: 'Priya Trends',
+    handle: '@priya_trends',
+    platform: 'Instagram',
+    phone: '+91 98765 43210',
+    email: 'priya.trends@gmail.com',
+    category: 'Lifestyle & E-Commerce',
+    followersCount: '240K',
+    standardRate: 25000,
+    upiId: 'priyatrends@okhdfcbank',
+    status: 'ACTIVE',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
 
 function moveToRecycleBin(
   originalId: string,
@@ -150,7 +248,7 @@ function moveToRecycleBin(
     title,
     subtitle,
     deletedAt: new Date().toISOString(),
-    deletedBy: deletedBy || 'Rachel Adams (ADMIN)',
+    deletedBy: deletedBy || 'Arun (Owner)',
     data: JSON.parse(JSON.stringify(data)),
     details
   };
@@ -191,6 +289,7 @@ if (!_g.__NEARLOOK_CRM_STORE__) {
     if (Array.isArray(diskData.leaveApplicationsList)) leaveApplicationsList = diskData.leaveApplicationsList;
     if (Array.isArray(diskData.financialApprovalsList)) financialApprovalsList = diskData.financialApprovalsList;
     if (Array.isArray(diskData.clientDocumentsList)) clientDocumentsList = diskData.clientDocumentsList;
+    if (Array.isArray(diskData.influencersList) && diskData.influencersList.length > 0) influencersList = diskData.influencersList;
   }
 
   _g.__NEARLOOK_CRM_STORE__ = {
@@ -218,7 +317,8 @@ if (!_g.__NEARLOOK_CRM_STORE__) {
     recycleBinList,
     leaveApplicationsList,
     financialApprovalsList,
-    clientDocumentsList
+    clientDocumentsList,
+    influencersList
   };
 
   // If initial run and no store on disk, write seed store now
@@ -252,6 +352,7 @@ recycleBinList = _g.__NEARLOOK_CRM_STORE__.recycleBinList;
 leaveApplicationsList = _g.__NEARLOOK_CRM_STORE__.leaveApplicationsList || [];
 financialApprovalsList = _g.__NEARLOOK_CRM_STORE__.financialApprovalsList || [];
 clientDocumentsList = _g.__NEARLOOK_CRM_STORE__.clientDocumentsList || [];
+influencersList = _g.__NEARLOOK_CRM_STORE__.influencersList || influencersList;
 
 export function persistStore(): void {
   try {
@@ -280,7 +381,8 @@ export function persistStore(): void {
       recycleBinList: _g.__NEARLOOK_CRM_STORE__.recycleBinList,
       leaveApplicationsList: _g.__NEARLOOK_CRM_STORE__.leaveApplicationsList,
       financialApprovalsList: _g.__NEARLOOK_CRM_STORE__.financialApprovalsList,
-      clientDocumentsList: _g.__NEARLOOK_CRM_STORE__.clientDocumentsList
+      clientDocumentsList: _g.__NEARLOOK_CRM_STORE__.clientDocumentsList,
+      influencersList: _g.__NEARLOOK_CRM_STORE__.influencersList || influencersList
     });
   } catch (err) {
     console.error('persistStore failed:', err);
@@ -582,20 +684,22 @@ const rawDataService = {
   },
 
   // Task Proofs & Automated Client/Owner Completion WhatsApp Notification
-  addTaskProofFile: (taskId: string, proof: { name: string; url: string; notes?: string; fileSize?: string }) => {
+  addTaskProofFile: (taskId: string, proof: { name: string; url?: string; dataUrl?: string; notes?: string; fileSize?: string }) => {
     const task = tasksList.find(t => t.id === taskId);
     if (!task) return null;
     if (!task.proofFiles) task.proofFiles = [];
     const item: TaskProofFile = {
       id: `proof-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
       name: proof.name,
-      url: proof.url,
+      url: proof.url || proof.dataUrl || '',
+      dataUrl: proof.dataUrl,
       uploadedAt: new Date().toISOString(),
       notes: proof.notes,
       fileSize: proof.fileSize || '1.8 MB'
     };
     task.proofFiles.push(item);
     task.updatedAt = new Date().toISOString();
+    persistStore();
     return item;
   },
 
@@ -651,7 +755,7 @@ const rawDataService = {
       `*Progress:* ${progressPercent}%\n\n` +
       `Client was updated via WhatsApp. Full audit logged in Nearlook Agency ERP.`;
 
-    const ownerPhone = '+919876543201'; // Owner Rachel Adams
+    const ownerPhone = '+919876543201'; // Owner Arun
     const ownerWhatsAppUrl = `https://wa.me/${ownerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(ownerMessage)}`;
 
     // Log to inMemoryWhatsAppLogs
@@ -669,7 +773,7 @@ const rawDataService = {
     inMemoryWhatsAppLogs.unshift({
       id: `wlog-${Date.now()}-owner`,
       recipientPhone: ownerPhone,
-      recipientName: 'Rachel Adams (Owner)',
+      recipientName: 'Arun (Owner)',
       recipientType: 'STAFF',
       eventType: 'TASK_STATUS_UPDATE',
       messageBody: ownerMessage,
@@ -1141,6 +1245,180 @@ const rawDataService = {
 
   // Projects & Milestones Management (IT, Software Engineering, AI & Digital Agency Delivery)
   getProjects: () => {
+    let storeChanged = false;
+
+    // Ensure Prestige IoT Portal IT project exists
+    let prestigeProj = projectsList.find(p => p.code === 'PRJ-SOF-104' || p.id === 'proj-sof-104');
+    if (!prestigeProj) {
+      prestigeProj = {
+        id: 'proj-sof-104',
+        code: 'PRJ-SOF-104',
+        clientId: 'client-prestige',
+        clientName: 'Prestige Urban Developers Ltd',
+        clientPhone: '+91 98451 00223',
+        location: 'Bangalore / GCP Cloud',
+        category: 'ENTERPRISE CLOUD SAAS',
+        domain: 'SOFTWARE',
+        title: 'Prestige Urban - Smart Enterprise IoT Portal & Mobile App',
+        description: 'Cloud microservices, tenant mobile app, IoT telemetry dashboard and executive analytics.',
+        techStack: 'React Native, Next.js, Node.js, Fastify, Docker',
+        projectType: 'ONE_TIME_PROJECT',
+        contractType: 'Milestone Execution Contract',
+        status: 'PLANNING',
+        isAdvanceReceived: false,
+        advanceRequired: 400000,
+        totalValue: 1250000,
+        budget: 1050000,
+        billedAmount: 0,
+        collectedAmount: 0,
+        cashCollected: 0,
+        bankCollected: 0,
+        balanceDue: 1250000,
+        gstAmount: 0,
+        expensesTotal: 0,
+        progressPercent: 4,
+        startDate: '01 Sept 2024',
+        dueDate: '30 Jun 2026',
+        assignedLeadName: 'Alex Rivera (PM)',
+        milestones: [
+          { id: 'ms-prestige-1', title: 'Phase 1: Architecture Blueprint & Cloud Schema', deliverable: 'System design, Auth0 SSO and DB schema', amount: 350000, status: 'IN_PROGRESS' },
+          { id: 'ms-prestige-2', title: 'Phase 2: Microservices & Real-time IoT Ingestion', deliverable: 'FastAPI microservices and telemetry ingestion', amount: 500000, status: 'PENDING' },
+          { id: 'ms-prestige-3', title: 'Phase 3: React Native Mobile Apps & Handover', deliverable: 'iOS & Android App Store release and admin dashboard', amount: 400000, status: 'PENDING' }
+        ],
+        createdAt: '2026-09-01T09:00:00.000Z',
+        updatedAt: '2026-09-01T09:00:00.000Z'
+      };
+      projectsList.push(prestigeProj);
+      storeChanged = true;
+    } else {
+      if (prestigeProj.title.includes('Greenfield') || prestigeProj.title.includes('Tower B')) {
+        prestigeProj.title = 'Prestige Urban - Smart Enterprise IoT Portal & Mobile App';
+        prestigeProj.location = 'Bangalore / GCP Cloud';
+        prestigeProj.category = 'ENTERPRISE CLOUD SAAS';
+        prestigeProj.domain = 'SOFTWARE';
+        storeChanged = true;
+      }
+    }
+
+    // Ensure K-RIDE Transit Mobile App IT project exists
+    let krideProj = projectsList.find(p => p.code === 'PRJ-SOF-102' || p.id === 'proj-sof-102');
+    if (!krideProj) {
+      krideProj = {
+        id: 'proj-sof-102',
+        code: 'PRJ-SOF-102',
+        clientId: 'client-kride',
+        clientName: 'Karnataka Rail Infrastructure Development (K-RIDE)',
+        clientPhone: '+91 94480 33445',
+        location: 'Whitefield, Bangalore / Hybrid Cloud',
+        category: 'MOBILE APP & REALTIME API',
+        domain: 'SOFTWARE',
+        title: 'K-RIDE Transit - Automated Ticketing & Commuter Mobile App',
+        description: 'Real-time commuter transit app, QR ticketing engine, push notification microservice & admin dashboard.',
+        techStack: 'Flutter, Node.js, Redis, WebSockets, PostgreSQL',
+        projectType: 'ONE_TIME_PROJECT',
+        contractType: 'Government EPC Contract',
+        status: 'ACTIVE',
+        isAdvanceReceived: false,
+        advanceRequired: 350000,
+        totalValue: 850000,
+        budget: 700000,
+        billedAmount: 0,
+        collectedAmount: 0,
+        cashCollected: 0,
+        bankCollected: 0,
+        balanceDue: 850000,
+        gstAmount: 0,
+        expensesTotal: 0,
+        progressPercent: 22,
+        startDate: '01 Apr 2024',
+        dueDate: '31 Aug 2025',
+        assignedLeadName: 'Alex Rivera (PM)',
+        milestones: [
+          { id: 'ms-kride-1', title: 'Mobile UI/UX Wireframes & API Gateway Design', deliverable: 'Figma prototypes and OpenAPI specification', amount: 250000, status: 'COMPLETED' },
+          { id: 'ms-kride-2', title: 'QR Ticketing Engine & Payment Gateway Integration', deliverable: 'Razorpay / UPI split checkout & offline validation', amount: 350000, status: 'IN_PROGRESS' },
+          { id: 'ms-kride-3', title: 'Real-time GPS Tracking & Production Cloud Deployment', deliverable: 'WebSocket live feeds and high-availability cluster', amount: 250000, status: 'PENDING' }
+        ],
+        createdAt: '2024-04-01T09:00:00.000Z',
+        updatedAt: '2024-04-01T09:00:00.000Z'
+      };
+      projectsList.push(krideProj);
+      storeChanged = true;
+    } else {
+      if (krideProj.title.includes('Metro Station') || krideProj.title.includes('Skywalk')) {
+        krideProj.title = 'K-RIDE Transit - Automated Ticketing & Commuter Mobile App';
+        krideProj.location = 'Whitefield, Bangalore / Hybrid Cloud';
+        krideProj.category = 'MOBILE APP & REALTIME API';
+        krideProj.domain = 'SOFTWARE';
+        storeChanged = true;
+      }
+    }
+
+    // Ensure client Arun exists
+    if (!clientsList.some(c => c.id === 'client-arun')) {
+      clientsList.push({
+        id: 'client-arun',
+        businessName: 'Arun Enterprises',
+        contactName: 'Arun',
+        whatsappNumber: '+91 98450 99887',
+        email: 'arun@example.com',
+        city: 'Bangalore',
+        address: 'Indiranagar, Bangalore, Karnataka',
+        clientType: 'ONE_TIME_PROJECT',
+        status: 'ACTIVE',
+        monthlyRetainerAmount: 0,
+        billingCycleDay: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      storeChanged = true;
+    }
+
+    // Ensure client Prestige exists
+    if (!clientsList.some(c => c.id === 'client-prestige')) {
+      clientsList.push({
+        id: 'client-prestige',
+        businessName: 'Prestige Urban Developers Ltd',
+        contactName: 'Sanjay Reddy',
+        whatsappNumber: '+91 98451 00223',
+        email: 'sanjay.reddy@prestigeurban.com',
+        city: 'Bangalore',
+        address: 'Outer Ring Road, Bellandur, Bangalore',
+        clientType: 'ONE_TIME_PROJECT',
+        status: 'ACTIVE',
+        monthlyRetainerAmount: 0,
+        billingCycleDay: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      storeChanged = true;
+    }
+
+    // Ensure client K-RIDE exists
+    if (!clientsList.some(c => c.id === 'client-kride')) {
+      clientsList.push({
+        id: 'client-kride',
+        businessName: 'Karnataka Rail Infrastructure Development (K-RIDE)',
+        contactName: 'M. K. Rao (Chief Engineer)',
+        whatsappNumber: '+91 94480 33445',
+        email: 'procurement@kride.karnataka.gov.in',
+        city: 'Bangalore',
+        address: 'Whitefield Main Road, Near ITPL, Bangalore',
+        clientType: 'ONE_TIME_PROJECT',
+        status: 'ACTIVE',
+        monthlyRetainerAmount: 0,
+        billingCycleDay: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      storeChanged = true;
+    }
+
+
+
+    if (storeChanged) {
+      persistStore();
+    }
+
     return projectsList.map(proj => {
       const client = clientsList.find(c => c.id === proj.clientId);
       const projReceipts = receiptsList.filter(r => r.projectId === proj.id || (r.clientName && r.clientName.toLowerCase() === (proj.clientName || '').toLowerCase()));
@@ -1169,7 +1447,9 @@ const rawDataService = {
       const finalBank = totalReceipts > 0 ? (totalCollected - finalCash) : (proj.bankCollected !== undefined ? proj.bankCollected : (totalCollected - finalCash));
 
       const projExpenses = expensesList.filter(e => (e as any).projectId === proj.id || e.clientId === proj.clientId);
-      const totalExpenses = proj.expensesTotal !== undefined ? proj.expensesTotal : projExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      const projVendors = vendorsList.filter(v => v.projectId === proj.id);
+      const calculatedExpenses = projExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0) + projVendors.reduce((s, v) => s + (Number(v.totalPayable) || 0), 0);
+      const totalExpenses = (proj.expensesTotal !== undefined && proj.expensesTotal > 0) ? proj.expensesTotal : calculatedExpenses;
 
       let progress = proj.progressPercent;
       if (progress === undefined) {
@@ -1747,6 +2027,7 @@ const rawDataService = {
     const task = tasksList.find(t => t.id === taskId);
     if (!task) return null;
     Object.assign(task, updates, { updatedAt: new Date().toISOString() });
+    persistStore();
     return task;
   },
 
@@ -1764,7 +2045,7 @@ const rawDataService = {
         await triggerTaskStatusUpdateWhatsApp({
           clientPhone: client.whatsappNumber,
           clientName: client.contactName,
-          ownerPhone: '+919876543201', // Owner Rachel Adams
+          ownerPhone: '+919876543201', // Owner Arun
           taskTitle: task.title,
           newStatus,
           staffName: staff.name,
@@ -2253,25 +2534,28 @@ const rawDataService = {
       : [];
 
     let initialPaid = 0;
-    if (data.initialPaymentAmount && data.initialPaymentAmount > 0) {
+    if (installments.length > 0) {
+      initialPaid = installments.reduce((s, inst) => {
+        if (inst.status === 'PAID') return s + Number(inst.paidAmount || inst.amount || 0);
+        if (inst.status === 'PARTIALLY_PAID') return s + Number(inst.paidAmount || 0);
+        return s;
+      }, 0);
+    } else if (data.initialPaymentAmount && Number(data.initialPaymentAmount) > 0) {
       initialPaid = Number(data.initialPaymentAmount);
-      if (!installments.some(inst => inst.status === 'PAID')) {
-        installments.unshift({
-          id: `inst-${Date.now()}-1`,
-          label: data.initialPaymentLabel || '1st Payment (Advance)',
-          amount: initialPaid,
-          paidAmount: initialPaid,
-          status: 'PAID',
-          dueDate: data.initialPaymentDate || new Date().toISOString().split('T')[0],
-          paidDate: data.initialPaymentDate || new Date().toISOString().split('T')[0],
-          paymentMethod: 'Bank Transfer / NEFT'
-        });
-      }
-    } else {
-      const paidInsts = installments.filter(inst => inst.status === 'PAID');
-      initialPaid = paidInsts.reduce((s, inst) => s + (inst.amount || 0), 0);
+      installments.unshift({
+        id: `inst-${Date.now()}-1`,
+        label: data.initialPaymentLabel || '1st Payment (Advance)',
+        amount: initialPaid,
+        paidAmount: initialPaid,
+        status: initialPaid >= totalAmount ? 'PAID' : 'PARTIALLY_PAID',
+        dueDate: data.initialPaymentDate || new Date().toISOString().split('T')[0],
+        paidDate: data.initialPaymentDate || new Date().toISOString().split('T')[0],
+        paymentMethod: 'UPI / Bank Transfer'
+      });
     }
 
+    // Strict cap: Initial collected cannot exceed total contract value
+    initialPaid = Math.min(initialPaid, totalAmount);
     const balanceDue = Math.max(0, totalAmount - initialPaid);
     const status: InvoiceStatus = balanceDue === 0 && initialPaid > 0
       ? 'PAID'
@@ -2377,10 +2661,12 @@ const rawDataService = {
 
     if (data.installments) {
       inv.installments = data.installments;
-      const paidSum = data.installments
-        .filter(inst => inst.status === 'PAID')
-        .reduce((s, inst) => s + (inst.paidAmount || inst.amount || 0), 0);
-      inv.paidAmount = paidSum;
+      const paidSum = data.installments.reduce((s, inst) => {
+        if (inst.status === 'PAID') return s + Number(inst.paidAmount || inst.amount || 0);
+        if (inst.status === 'PARTIALLY_PAID') return s + Number(inst.paidAmount || 0);
+        return s;
+      }, 0);
+      inv.paidAmount = Math.min(paidSum, inv.totalAmount);
 
       // Automatically sync receipts for any paid installment that doesn't have one
       data.installments.forEach(inst => {
@@ -2824,6 +3110,15 @@ const rawDataService = {
       updatedAt: new Date().toISOString()
     };
     vendorsList.push(newVendor);
+    if (newVendor.projectId) {
+      const proj = projectsList.find(p => p.id === newVendor.projectId);
+      if (proj) {
+        const projVendors = vendorsList.filter(v => v.projectId === proj.id);
+        const projExps = expensesList.filter(e => (e as any).projectId === proj.id);
+        proj.expensesTotal = projVendors.reduce((s, v) => s + (Number(v.totalPayable) || 0), 0) + projExps.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      }
+    }
+    persistStore();
     return newVendor;
   },
 
@@ -2861,6 +3156,7 @@ const rawDataService = {
       createdAt: new Date().toISOString()
     };
     expensesList.unshift(exp);
+    persistStore();
 
     // Double-Entry Accounting Tally Ledger Post
     const isCash = (paymentMethod || '').toUpperCase().includes('CASH');
@@ -2894,13 +3190,15 @@ const rawDataService = {
 
     // Automated WhatsApp notice to vendor
     try {
-      await triggerVendorPaymentWhatsApp({
-        phone: vendor.phone,
-        vendorCompany: vendor.companyName,
-        amountPaid: amount,
-        balanceDue: vendor.balanceDue,
-        dueDate: vendor.dueDate
-      });
+      if (vendor.phone) {
+        await triggerVendorPaymentWhatsApp({
+          phone: vendor.phone,
+          vendorCompany: vendor.companyName,
+          amountPaid: amount,
+          balanceDue: vendor.balanceDue,
+          dueDate: vendor.dueDate
+        });
+      }
     } catch (e) {
       console.error('Vendor WhatsApp trigger error:', e);
     }
@@ -2911,12 +3209,25 @@ const rawDataService = {
   updateVendor: (id: string, data: Partial<Vendor>) => {
     const vend = vendorsList.find(v => v.id === id);
     if (!vend) return null;
+    const oldProjectId = vend.projectId;
     if (data.totalPayable !== undefined || data.advancePaid !== undefined) {
       const total = data.totalPayable !== undefined ? data.totalPayable : vend.totalPayable;
       const adv = data.advancePaid !== undefined ? data.advancePaid : vend.advancePaid;
       data.balanceDue = Math.max(0, total - adv);
     }
     Object.assign(vend, data, { updatedAt: new Date().toISOString() });
+    
+    // Sync affected projects expenses
+    const pId = vend.projectId || oldProjectId;
+    if (pId) {
+      const proj = projectsList.find(p => p.id === pId);
+      if (proj) {
+        const projVendors = vendorsList.filter(v => v.projectId === proj.id);
+        const projExps = expensesList.filter(e => (e as any).projectId === proj.id);
+        proj.expensesTotal = projVendors.reduce((s, v) => s + (Number(v.totalPayable) || 0), 0) + projExps.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      }
+    }
+    persistStore();
     return vend;
   },
 
@@ -2924,6 +3235,7 @@ const rawDataService = {
     const idx = vendorsList.findIndex(v => v.id === id);
     if (idx === -1) return false;
     const vend = vendorsList[idx];
+    const pId = vend.projectId;
     moveToRecycleBin(
       vend.id,
       'VENDOR',
@@ -2933,6 +3245,55 @@ const rawDataService = {
       deletedBy
     );
     vendorsList.splice(idx, 1);
+    if (pId) {
+      const proj = projectsList.find(p => p.id === pId);
+      if (proj) {
+        const projVendors = vendorsList.filter(v => v.projectId === proj.id);
+        const projExps = expensesList.filter(e => (e as any).projectId === proj.id);
+        proj.expensesTotal = projVendors.reduce((s, v) => s + (Number(v.totalPayable) || 0), 0) + projExps.reduce((s, e) => s + (Number(e.amount) || 0), 0);
+      }
+    }
+    persistStore();
+    return true;
+  },
+
+  // Influencers & Creators Directory
+  getInfluencers: () => influencersList,
+
+  addInfluencer: (data: Omit<Influencer, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newInf: Influencer = {
+      ...data,
+      id: `inf-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    influencersList.push(newInf);
+    persistStore();
+    return newInf;
+  },
+
+  updateInfluencer: (id: string, data: Partial<Influencer>) => {
+    const inf = influencersList.find(i => i.id === id);
+    if (!inf) return null;
+    Object.assign(inf, data, { updatedAt: new Date().toISOString() });
+    persistStore();
+    return inf;
+  },
+
+  deleteInfluencer: (id: string, deletedBy?: string) => {
+    const idx = influencersList.findIndex(i => i.id === id);
+    if (idx === -1) return false;
+    const inf = influencersList[idx];
+    moveToRecycleBin(
+      inf.id,
+      'INFLUENCER' as any,
+      inf.name,
+      `${inf.platform} (${inf.handle}) • Followers: ${inf.followersCount}`,
+      inf,
+      deletedBy
+    );
+    influencersList.splice(idx, 1);
+    persistStore();
     return true;
   },
 
@@ -3565,18 +3926,14 @@ const rawDataService = {
     financialApprovalsList.length = 0;
     clientDocumentsList.length = 0;
     chartOfAccountsList.forEach(acc => acc.balance = 0);
-    staffList.length = 0;
-    DEMO_PROFILES.forEach(p => staffList.push({
-      ...p,
-      monthlySalary: 0,
-      hourlyRate: 0,
-      activeTasksCount: 0,
-      totalProjectsWorked: 0,
-      overdueCount: 0,
-      salaryPaidDate: undefined,
-      isSalaryOverdue: false,
-      documents: []
-    }));
+    staffList.forEach(s => {
+      s.activeTasksCount = 0;
+      s.totalProjectsWorked = 0;
+      s.overdueCount = 0;
+      s.salaryPaidDate = undefined;
+      s.isSalaryOverdue = false;
+      s.documents = [];
+    });
     persistStore();
     return { success: true, message: 'All entry data cleared. Fresh start ready.' };
   }

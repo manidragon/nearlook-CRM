@@ -20,6 +20,10 @@ interface AuthContextType {
   hasModuleAccess: (moduleKey: string) => boolean;
   canAccessConsultationNotes: (assignedStaffId?: string) => boolean;
   refreshProfiles: () => Promise<void>;
+  isAuthenticated: boolean;
+  authLoading: boolean;
+  login: (staff: StaffMember) => void;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,6 +31,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [currentStaff, setCurrentStaffState] = useState<StaffMember>(DEMO_PROFILES[0]);
   const [allProfiles, setAllProfiles] = useState<StaffMember[]>(DEMO_PROFILES);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
 
   const refreshProfiles = async () => {
     try {
@@ -49,18 +55,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshProfiles();
   }, []);
 
-  // Load from localStorage if present
+  // Check login session from localStorage
   useEffect(() => {
-    const savedId = localStorage.getItem('nearlook_active_staff_id');
-    if (savedId) {
-      const found = allProfiles.find(p => p.id === savedId);
-      if (found) setCurrentStaffState(found);
+    try {
+      const storedSession = localStorage.getItem('nearlook_logged_in_user');
+      const savedId = localStorage.getItem('nearlook_active_staff_id');
+      if (storedSession) {
+        const parsed = JSON.parse(storedSession);
+        if (parsed && parsed.id) {
+          setIsAuthenticated(true);
+          const found = allProfiles.find(p => p.id === parsed.id) || parsed;
+          setCurrentStaffState(found);
+        } else {
+          setIsAuthenticated(false);
+        }
+      } else if (savedId) {
+        const found = allProfiles.find(p => p.id === savedId);
+        if (found) {
+          setCurrentStaffState(found);
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+        }
+      } else {
+        setIsAuthenticated(false);
+      }
+    } catch (e) {
+      setIsAuthenticated(false);
+    } finally {
+      setAuthLoading(false);
     }
   }, [allProfiles]);
+
+  // Client-side authentication gating
+  useEffect(() => {
+    if (!authLoading && typeof window !== 'undefined') {
+      const isLoginRoute = window.location.pathname === '/login';
+      if (!isAuthenticated && !isLoginRoute) {
+        window.location.href = '/login';
+      }
+    }
+  }, [isAuthenticated, authLoading]);
+
+  const login = (staff: StaffMember) => {
+    setIsAuthenticated(true);
+    setCurrentStaffState(staff);
+    localStorage.setItem('nearlook_logged_in_user', JSON.stringify(staff));
+    localStorage.setItem('nearlook_active_staff_id', staff.id);
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('nearlook_logged_in_user');
+    localStorage.removeItem('nearlook_active_staff_id');
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login';
+    }
+  };
 
   const setCurrentStaff = (staff: StaffMember) => {
     setCurrentStaffState(staff);
     localStorage.setItem('nearlook_active_staff_id', staff.id);
+    localStorage.setItem('nearlook_logged_in_user', JSON.stringify(staff));
   };
 
   const updateCurrentUser = (updated: Partial<StaffMember>) => {
@@ -105,7 +161,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isFieldStaff,
         hasModuleAccess,
         canAccessConsultationNotes,
-        refreshProfiles
+        refreshProfiles,
+        isAuthenticated,
+        authLoading,
+        login,
+        logout
       }}
     >
       {children}

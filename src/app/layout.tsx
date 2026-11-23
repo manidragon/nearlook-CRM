@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Sidebar from "@/components/Sidebar";
-import Header from "@/components/Header";
-import AIChatbotModal from "@/components/AIChatbotModal";
+import AppShell from "@/components/AppShell";
 import { AuthProvider } from "@/lib/AuthContext";
 
 export const metadata: Metadata = {
@@ -24,21 +22,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-[#fafbfc] text-slate-900 antialiased selection:bg-orange-500 selection:text-white">
         <AuthProvider>
-          <div className="flex min-h-screen">
-            {/* White & Orange Sidebar */}
-            <Sidebar />
-
-            {/* Main Content Area */}
-            <div className="flex-1 ml-64 flex flex-col min-h-screen">
-              <Header />
-              <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
-                {children}
-              </main>
-            </div>
-          </div>
-
-          {/* Global AI Executive Copilot Drawer & Floating Trigger */}
-          <AIChatbotModal />
+          <AppShell>{children}</AppShell>
         </AuthProvider>
       </body>
     </html>

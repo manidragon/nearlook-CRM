@@ -24,15 +24,24 @@ export async function POST(req: Request) {
       bankDetails, 
       vendorType, 
       serviceCategory, 
+      projectId,
+      projectName,
+      clientName,
+      influencerId,
+      influencerName,
       totalPayable, 
       advancePaid, 
       dueDate,
       platform,
-      followerCount 
+      followerCount,
+      paymentMode,
+      invoiceNumber,
+      receiptUrl,
+      notes
     } = body;
 
-    if (!companyName || !phone) {
-      return NextResponse.json({ success: false, error: 'Company/Influencer name and phone are required' }, { status: 400 });
+    if (!companyName) {
+      return NextResponse.json({ success: false, error: 'Platform, Vendor or Influencer name is required' }, { status: 400 });
     }
 
     const total = Number(totalPayable) || 0;
@@ -42,17 +51,26 @@ export async function POST(req: Request) {
     const vendor = DataService.addVendor({
       companyName,
       contactPerson,
-      phone,
+      phone: phone || '',
       email,
       bankDetails,
       vendorType: vendorType || 'VENDOR',
       serviceCategory: serviceCategory || 'HOSTING_SERVERS',
+      projectId: projectId || undefined,
+      projectName: projectName || undefined,
+      clientName: clientName || undefined,
+      influencerId: influencerId || undefined,
+      influencerName: influencerName || undefined,
       totalPayable: total,
       advancePaid: advance,
       balanceDue: balance,
       dueDate,
       platform,
-      followerCount
+      followerCount,
+      paymentMode,
+      invoiceNumber,
+      receiptUrl,
+      notes
     });
 
     return NextResponse.json({ success: true, data: vendor });

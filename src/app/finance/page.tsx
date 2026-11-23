@@ -579,7 +579,7 @@ export default function FinancePage() {
       const q = vendorSearchQuery.toLowerCase();
       return (
         v.companyName.toLowerCase().includes(q) ||
-        v.phone.includes(q) ||
+        (v.phone && v.phone.includes(q)) ||
         v.serviceCategory.toLowerCase().includes(q)
       );
     }

@@ -46,9 +46,10 @@ import {
   Clock,
   MapPin,
   Eye,
+  AlertTriangle,
   X
 } from 'lucide-react';
-import { Lead, StaffMember, LeadStage, ServiceType, AgencyService, StaffTeam, ConsultationNote, LeadSource } from '@/lib/types';
+import { Lead, StaffMember, LeadStage, ServiceType, AgencyService, StaffTeam, ConsultationNote, LeadSource, Project, Quotation } from '@/lib/types';
 import { getWhatsAppDirectUrl } from '@/lib/whatsappService';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -127,6 +128,8 @@ export default function LeadsPage() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [services, setServices] = useState<AgencyService[]>(DEFAULT_SERVICES);
   const [clients, setClients] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStage, setSelectedStage] = useState<string>('ALL');
@@ -172,6 +175,62 @@ export default function LeadsPage() {
     assignedTeam: 'WEB_DEVELOPMENT' as StaffTeam,
     assignedManagerId: ''
   });
+
+  // Duplicate Client Detection State
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    client: any;
+    reason: string;
+    field: 'phone' | 'business' | 'email';
+    isLead?: boolean;
+  } | null>(null);
+
+  const checkDuplicateClient = (phone: string, busName: string, emailStr?: string) => {
+    const normPhone = phone ? phone.replace(/\D/g, '').slice(-10) : '';
+    const normBusName = busName ? busName.trim().toLowerCase() : '';
+    const normEmail = emailStr ? emailStr.trim().toLowerCase() : '';
+
+    if (!normPhone && !normBusName && !normEmail) return null;
+
+    // 1. Check existing registered clients
+    if (clients && clients.length > 0) {
+      for (const c of clients) {
+        const cPhone = (c.whatsappNumber || c.phone || '').replace(/\D/g, '').slice(-10);
+        const cBusName = (c.businessName || '').trim().toLowerCase();
+        const cEmail = (c.email || '').trim().toLowerCase();
+
+        if (normPhone && normPhone.length >= 7 && cPhone && (cPhone === normPhone || cPhone.endsWith(normPhone) || normPhone.endsWith(cPhone))) {
+          return { client: c, reason: `Phone Number (${c.whatsappNumber || c.phone})`, field: 'phone' as const, isLead: false };
+        }
+        if (normBusName && normBusName.length >= 3 && cBusName && (cBusName === normBusName || (normBusName.length >= 4 && cBusName.includes(normBusName)))) {
+          return { client: c, reason: `Business Name ("${c.businessName}")`, field: 'business' as const, isLead: false };
+        }
+        if (normEmail && normEmail.length >= 5 && cEmail && cEmail === normEmail) {
+          return { client: c, reason: `Email Address (${c.email})`, field: 'email' as const, isLead: false };
+        }
+      }
+    }
+
+    // 2. Check existing leads in pipeline
+    if (leads && leads.length > 0) {
+      for (const l of leads) {
+        const lPhone = (l.whatsappNumber || '').replace(/\D/g, '').slice(-10);
+        const lBusName = (l.businessName || '').trim().toLowerCase();
+        const lEmail = (l.email || '').trim().toLowerCase();
+
+        if (normPhone && normPhone.length >= 7 && lPhone && (lPhone === normPhone || lPhone.endsWith(normPhone) || normPhone.endsWith(lPhone))) {
+          return { client: { id: l.id, businessName: l.businessName, contactName: l.leadName, whatsappNumber: l.whatsappNumber }, reason: `Existing Lead Phone (${l.whatsappNumber})`, field: 'phone' as const, isLead: true };
+        }
+        if (normBusName && normBusName.length >= 3 && lBusName && (lBusName === normBusName || (normBusName.length >= 4 && lBusName.includes(normBusName)))) {
+          return { client: { id: l.id, businessName: l.businessName, contactName: l.leadName, whatsappNumber: l.whatsappNumber }, reason: `Existing Lead Business ("${l.businessName}")`, field: 'business' as const, isLead: true };
+        }
+        if (normEmail && normEmail.length >= 5 && lEmail && lEmail === normEmail) {
+          return { client: { id: l.id, businessName: l.businessName, contactName: l.leadName, whatsappNumber: l.whatsappNumber }, reason: `Existing Lead Email (${l.email})`, field: 'email' as const, isLead: true };
+        }
+      }
+    }
+
+    return null;
+  };
 
   // Edit Lead State
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -399,11 +458,13 @@ export default function LeadsPage() {
 
   const fetchLeads = async () => {
     try {
-      const [leadsRes, staffRes, servicesRes, clientsRes] = await Promise.all([
+      const [leadsRes, staffRes, servicesRes, clientsRes, projRes, quotesRes] = await Promise.all([
         fetch('/api/leads').then(r => r.json()),
         fetch('/api/staff').then(r => r.json()),
         fetch('/api/services').then(r => r.json()).catch(() => ({ success: false })),
-        fetch('/api/clients').then(r => r.json()).catch(() => ({ success: false, data: [] }))
+        fetch('/api/clients').then(r => r.json()).catch(() => ({ success: false, data: [] })),
+        fetch('/api/projects').then(r => r.json()).catch(() => ({ success: false, data: [] })),
+        fetch('/api/quotations').then(r => r.json()).catch(() => ({ success: false, data: [] }))
       ]);
       if (leadsRes.success) setLeads(leadsRes.data);
       if (staffRes.success) setStaff(staffRes.data);
@@ -412,6 +473,12 @@ export default function LeadsPage() {
       }
       if (clientsRes?.success && Array.isArray(clientsRes.data)) {
         setClients(clientsRes.data);
+      }
+      if (projRes?.success && Array.isArray(projRes.data)) {
+        setProjects(projRes.data);
+      }
+      if (quotesRes?.success && Array.isArray(quotesRes.data)) {
+        setQuotations(quotesRes.data);
       }
     } catch (e) {
       console.error(e);
@@ -1058,6 +1125,53 @@ export default function LeadsPage() {
           const waChatUrl = getWhatsAppDirectUrl(lead.whatsappNumber, `Hi ${lead.leadName}, following up regarding ${lead.businessName} with Nearlook Mart Pvt Ltd.`);
           const isTodayFollowUp = lead.nextFollowUpDate === new Date().toISOString().split('T')[0];
 
+          // Match Project if already created for this lead (exact, client, title, or typo-tolerant)
+          const norm = (str?: string) => (str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+          const lBizNorm = norm(lead.businessName);
+          const lNameNorm = norm(lead.leadName);
+
+          const matchedProj = projects.find(p => {
+            if (!p) return false;
+            if ((p as any).leadId === lead.id) return true;
+            if (lead.clientId && p.clientId === lead.clientId) return true;
+            const pClientNorm = norm(p.clientName);
+            const pTitleNorm = norm(p.title);
+            if (lBizNorm && pClientNorm && (pClientNorm === lBizNorm || pClientNorm.includes(lBizNorm) || lBizNorm.includes(pClientNorm))) return true;
+            if (lBizNorm && pTitleNorm && (pTitleNorm.includes(lBizNorm) || lBizNorm.includes(pTitleNorm))) return true;
+            if (lNameNorm && pClientNorm && (pClientNorm === lNameNorm || pClientNorm.includes(lNameNorm) || lNameNorm.includes(pClientNorm))) return true;
+            // Typo-tolerant: e.g. "kathikco" vs "karthikco"
+            if (lBizNorm.length >= 5 && pClientNorm.length >= 5 && Math.abs(lBizNorm.length - pClientNorm.length) <= 2) {
+              let diff = 0;
+              const minLen = Math.min(lBizNorm.length, pClientNorm.length);
+              for (let i = 0; i < minLen; i++) {
+                if (lBizNorm[i] !== pClientNorm[i]) diff++;
+              }
+              if (diff <= 2) return true;
+            }
+            return false;
+          });
+
+          // Match Quotation if already created for this lead
+          const matchedQuote = quotations.find(q => {
+            if (!q) return false;
+            if (q.leadId === lead.id) return true;
+            const qBizNorm = norm(q.clientBusiness || (q as any).clientCompany);
+            const qNameNorm = norm((q as any).clientName || (q as any).clientContact);
+            if (lBizNorm && qBizNorm && (qBizNorm === lBizNorm || qBizNorm.includes(lBizNorm) || lBizNorm.includes(qBizNorm))) return true;
+            if (lBizNorm && qNameNorm && (qNameNorm === lBizNorm || qNameNorm.includes(lBizNorm) || lBizNorm.includes(qNameNorm))) return true;
+            if (lNameNorm && qNameNorm && (qNameNorm === lNameNorm || qNameNorm.includes(lNameNorm) || lNameNorm.includes(qNameNorm))) return true;
+            // Typo-tolerant
+            if (lBizNorm.length >= 5 && qBizNorm.length >= 5 && Math.abs(lBizNorm.length - qBizNorm.length) <= 2) {
+              let diff = 0;
+              const minLen = Math.min(lBizNorm.length, qBizNorm.length);
+              for (let i = 0; i < minLen; i++) {
+                if (lBizNorm[i] !== qBizNorm[i]) diff++;
+              }
+              if (diff <= 2) return true;
+            }
+            return false;
+          });
+
           return (
             <div
               key={lead.id}
@@ -1071,9 +1185,19 @@ export default function LeadsPage() {
                       <h3 className="text-base font-black text-slate-900 truncate tracking-tight" title={lead.businessName}>
                         {lead.businessName}
                       </h3>
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0 ${stageObj.color}`}>
-                        {stageObj.label}
-                      </span>
+                      {/* Interactive Stage / Status Pop-down Selector */}
+                      <select
+                        value={lead.leadStage}
+                        onChange={(e) => handleStageChange(lead.id, e.target.value as LeadStage)}
+                        className={`text-[10px] font-black px-2 py-0.5 rounded-full border shrink-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-orange-400 ${stageObj.color}`}
+                        title="Click to change live status directly"
+                      >
+                        {STAGES.map(s => (
+                          <option key={s.key} value={s.key} className="bg-white text-slate-800 font-semibold">
+                            {s.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
                       Contact: <span className="text-slate-800 font-bold">{lead.leadName}</span>
@@ -1143,8 +1267,16 @@ export default function LeadsPage() {
                   <span>View Details</span>
                 </button>
 
-                {/* Quick Quotation or Won Direct Create Project */}
-                {lead.leadStage === 'WON' ? (
+                {/* Project Status & Action */}
+                {matchedProj ? (
+                  <Link
+                    href={`/projects?viewProjectId=${matchedProj.id}`}
+                    className="py-1 px-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[11px] font-black shadow-xs transition-all flex items-center justify-center gap-1 shrink-0"
+                    title={`Project active: ${matchedProj.title}`}
+                  >
+                    <span>📁 Project Created</span>
+                  </Link>
+                ) : lead.leadStage === 'WON' ? (
                   <Link
                     href={`/projects?createFromLead=${lead.id}`}
                     className="py-1 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[11px] font-black shadow-xs transition-all flex items-center justify-center gap-1 shrink-0"
@@ -1152,10 +1284,22 @@ export default function LeadsPage() {
                   >
                     <span>🚀 Create Project</span>
                   </Link>
+                ) : null}
+
+                {/* Quotation Status & Action (Edit if already exists, Create if new) */}
+                {matchedQuote ? (
+                  <Link
+                    href={`/quotations?editId=${matchedQuote.id}`}
+                    className="py-1 px-2 bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white border border-amber-300 rounded-xl text-[11px] font-bold transition-all flex items-center gap-1 shrink-0"
+                    title={`Edit Existing Quotation (${matchedQuote.quotationNumber})`}
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                    <span>Edit Quote</span>
+                  </Link>
                 ) : (
                   <Link
                     href={`/quotations?leadId=${lead.id}&leadName=${encodeURIComponent(lead.leadName)}&businessName=${encodeURIComponent(lead.businessName)}&phone=${encodeURIComponent(lead.whatsappNumber)}&dealValue=${lead.estimatedDealValue || 0}`}
-                    className="p-1.5 rounded-xl bg-orange-50 hover:bg-orange-600 text-orange-600 hover:text-white border border-orange-200 transition-colors"
+                    className="p-1.5 rounded-xl bg-orange-50 hover:bg-orange-600 text-orange-600 hover:text-white border border-orange-200 transition-colors shrink-0"
                     title="Create Quotation"
                   >
                     <FileSpreadsheet className="w-3.5 h-3.5" />
@@ -1725,6 +1869,7 @@ export default function LeadsPage() {
                     onClick={() => {
                       setClientSelectionMode('NEW');
                       setFormData(prev => ({ ...prev, clientId: '' }));
+                      setDuplicateWarning(null);
                     }}
                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all text-center ${
                       clientSelectionMode === 'NEW'
@@ -1778,6 +1923,50 @@ export default function LeadsPage() {
                   </div>
                 )}
 
+                {/* Live Duplicate Client Warning Banner */}
+                {duplicateWarning && clientSelectionMode === 'NEW' && (
+                  <div className="p-3.5 bg-amber-50 border-2 border-amber-400 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn text-amber-950 shadow-md">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-amber-200/90 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                        <AlertTriangle className="w-4 h-4 text-amber-800" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-black flex items-center gap-2">
+                          <span>⚠️ Client Already Exists in Directory!</span>
+                          <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
+                            Matched by {duplicateWarning.reason}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-amber-800 mt-1 leading-snug">
+                          <strong>{duplicateWarning.client.businessName}</strong> (Contact: {duplicateWarning.client.contactName} • Phone: {duplicateWarning.client.whatsappNumber}) is already registered in your directory.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setClientSelectionMode('EXISTING');
+                          handleSelectExistingClient(duplicateWarning.client.id);
+                          setDuplicateWarning(null);
+                        }}
+                        className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-amber-600/20 cursor-pointer"
+                      >
+                        <Building2 className="w-3.5 h-3.5" />
+                        <span>Link to Existing Client</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDuplicateWarning(null)}
+                        className="p-1.5 text-amber-700 hover:bg-amber-200/60 rounded-lg text-xs cursor-pointer"
+                        title="Dismiss warning"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
                     <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
@@ -1804,9 +1993,41 @@ export default function LeadsPage() {
                       required
                       placeholder="e.g. Nearlook Mart / BioMed Innovations"
                       value={formData.businessName}
-                      onChange={(e) => setFormData({ ...formData, businessName: e.target.value })}
-                      className="mt-1 w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData({ ...formData, businessName: val });
+                        if (clientSelectionMode === 'NEW') {
+                          setDuplicateWarning(checkDuplicateClient(formData.whatsappNumber, val, formData.email));
+                        }
+                      }}
+                      onBlur={() => {
+                        if (clientSelectionMode === 'NEW') {
+                          setDuplicateWarning(checkDuplicateClient(formData.whatsappNumber, formData.businessName, formData.email));
+                        }
+                      }}
+                      className={`mt-1 w-full bg-white border rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs ${
+                        duplicateWarning && duplicateWarning.field === 'business' ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-200'
+                      }`}
                     />
+                    {duplicateWarning && clientSelectionMode === 'NEW' && duplicateWarning.field === 'business' && (
+                      <div className="mt-1 p-1.5 px-2 bg-amber-100/90 border border-amber-300 rounded-lg text-[11px] font-bold text-amber-900 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          Matches registered client "{duplicateWarning.client.businessName}"
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClientSelectionMode('EXISTING');
+                            handleSelectExistingClient(duplicateWarning.client.id);
+                            setDuplicateWarning(null);
+                          }}
+                          className="text-amber-950 underline text-[10px] ml-2 font-black cursor-pointer hover:text-orange-700"
+                        >
+                          Select Client →
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1854,9 +2075,41 @@ export default function LeadsPage() {
                       required
                       placeholder="e.g. +91 98765 43210"
                       value={formData.whatsappNumber}
-                      onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value })}
-                      className="mt-1 w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData({ ...formData, whatsappNumber: val });
+                        if (clientSelectionMode === 'NEW') {
+                          setDuplicateWarning(checkDuplicateClient(val, formData.businessName, formData.email));
+                        }
+                      }}
+                      onBlur={() => {
+                        if (clientSelectionMode === 'NEW') {
+                          setDuplicateWarning(checkDuplicateClient(formData.whatsappNumber, formData.businessName, formData.email));
+                        }
+                      }}
+                      className={`mt-1 w-full bg-white border rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs ${
+                        duplicateWarning && duplicateWarning.field === 'phone' ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-200'
+                      }`}
                     />
+                    {duplicateWarning && clientSelectionMode === 'NEW' && duplicateWarning.field === 'phone' && (
+                      <div className="mt-1 p-1.5 px-2 bg-amber-100/90 border border-amber-300 rounded-lg text-[11px] font-bold text-amber-900 flex items-center justify-between">
+                        <span className="flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          Phone belongs to registered client "{duplicateWarning.client.businessName}"
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setClientSelectionMode('EXISTING');
+                            handleSelectExistingClient(duplicateWarning.client.id);
+                            setDuplicateWarning(null);
+                          }}
+                          className="text-amber-950 underline text-[10px] ml-2 font-black cursor-pointer hover:text-orange-700"
+                        >
+                          Select Client →
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -1868,8 +2121,21 @@ export default function LeadsPage() {
                       type="email"
                       placeholder="contact@business.com"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="mt-1 w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFormData({ ...formData, email: val });
+                        if (clientSelectionMode === 'NEW') {
+                          setDuplicateWarning(checkDuplicateClient(formData.whatsappNumber, formData.businessName, val));
+                        }
+                      }}
+                      onBlur={() => {
+                        if (clientSelectionMode === 'NEW') {
+                          setDuplicateWarning(checkDuplicateClient(formData.whatsappNumber, formData.businessName, formData.email));
+                        }
+                      }}
+                      className={`mt-1 w-full bg-white border rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-xs ${
+                        duplicateWarning && duplicateWarning.field === 'email' ? 'border-amber-400 ring-1 ring-amber-400' : 'border-slate-200'
+                      }`}
                     />
                   </div>
                 </div>
@@ -2226,6 +2492,7 @@ export default function LeadsPage() {
                     onClick={() => {
                       setClientSelectionMode('NEW');
                       setFormData(prev => ({ ...prev, clientId: '' }));
+                      setDuplicateWarning(null);
                     }}
                     className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all text-center ${
                       clientSelectionMode === 'NEW'

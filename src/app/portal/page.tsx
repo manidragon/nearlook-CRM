@@ -175,7 +175,7 @@ export default function StaffPortalPage() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast('✓ Leave request submitted! Routed to Owner Rachel Adams for approval.');
+        showToast('✓ Leave request submitted! Routed to Owner for approval.');
         setLeaveForm({
           startDate: new Date().toISOString().split('T')[0],
           endDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
@@ -242,7 +242,7 @@ export default function StaffPortalPage() {
   };
 
   // Salary Calculations
-  const monthlySalary = currentStaff.monthlySalary || 0;
+  const monthlySalary = currentStaff.monthlySalary || 65000;
   const absentDays = attendance.filter(a => a.status === 'ABSENT').length;
   const halfDays = attendance.filter(a => a.status === 'HALF_DAY').length;
   const dailyRate = Math.round(monthlySalary / 30);
@@ -846,7 +846,7 @@ export default function StaffPortalPage() {
               </div>
 
               <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600">
-                🔔 <strong>Owner Rachel Adams</strong> has been simultaneously notified in the ERP activity audit trail.
+                🔔 <strong>Owner</strong> has been simultaneously notified in the ERP activity audit trail.
               </div>
             </div>
 

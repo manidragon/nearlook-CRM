@@ -117,6 +117,18 @@ function QuotationContent() {
 
   useEffect(() => {
     if (hasInitializedFromQuery.current) return;
+
+    const qEditId = searchParams.get('editId');
+    if (qEditId && quotations.length > 0) {
+      const quote = quotations.find(q => q.id === qEditId);
+      if (quote) {
+        hasInitializedFromQuery.current = true;
+        openEditQuotation(quote);
+        setIsEditModalOpen(true);
+        return;
+      }
+    }
+
     const qLeadId = searchParams.get('leadId');
     if (qLeadId && leads.length > 0) {
       const lead = leads.find(l => l.id === qLeadId);
@@ -141,7 +153,7 @@ function QuotationContent() {
         setIsModalOpen(true);
       }
     }
-  }, [searchParams, leads]);
+  }, [searchParams, leads, quotations]);
 
   // Real-time synchronization across CRM pages & AI Copilot
   useEffect(() => {

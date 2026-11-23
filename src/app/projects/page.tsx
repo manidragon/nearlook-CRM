@@ -45,9 +45,10 @@ import {
   Cloud,
   CheckSquare,
   Square,
-  GitBranch
+  GitBranch,
+  RefreshCw
 } from 'lucide-react';
-import { Project, Client, ProjectMilestone, Invoice, PaymentReceipt, Task } from '@/lib/types';
+import { Project, Client, ProjectMilestone, Invoice, PaymentReceipt, Task, Vendor } from '@/lib/types';
 import { useAuth } from '@/lib/AuthContext';
 
 const formatINR = (val?: number) => {
@@ -80,6 +81,7 @@ export default function ProjectsPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [quotations, setQuotations] = useState<any[]>([]);
   const [leads, setLeads] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Active Open Project: null = Master Directory; Project = Detailed Workspace
@@ -129,6 +131,7 @@ export default function ProjectsPage() {
   const [formStatus, setFormStatus] = useState('PLANNING');
   const [formDescription, setFormDescription] = useState('');
   const [formLeadName, setFormLeadName] = useState('Alex Rivera (Lead Architect)');
+  const [isSavingProject, setIsSavingProject] = useState(false);
 
   // Form State for Add Client
   const [clientForm, setClientForm] = useState({
@@ -169,16 +172,21 @@ export default function ProjectsPage() {
   const loadData = async () => {
     console.log('[ProjectsPage] loadData started');
     try {
-      const [projRes, clientsRes, invRes, rcpRes, tasksRes, quotesRes, leadsRes] = await Promise.all([
+      const [projRes, clientsRes, invRes, rcpRes, tasksRes, quotesRes, leadsRes, vendorsRes] = await Promise.all([
         fetch('/api/projects').then(r => r.json()).catch(err => { console.error('proj error:', err); return { success: false, data: [] }; }),
         fetch('/api/clients').then(r => r.json()).catch(err => { console.error('clients error:', err); return { success: false, data: [] }; }),
         fetch('/api/invoices').then(r => r.json()).catch(err => { console.error('inv error:', err); return { success: false, data: [] }; }),
         fetch('/api/payments').then(r => r.json()).catch(err => { console.error('payments error:', err); return { success: false, data: [] }; }),
         fetch('/api/tasks').then(r => r.json()).catch(() => ({ success: false, data: [] })),
         fetch('/api/quotations').then(r => r.json()).catch(() => ({ success: false, data: [] })),
-        fetch('/api/leads').then(r => r.json()).catch(() => ({ success: false, data: [] }))
+        fetch('/api/leads').then(r => r.json()).catch(() => ({ success: false, data: [] })),
+        fetch('/api/vendors').then(r => r.json()).catch(() => ({ success: false, data: [] }))
       ]);
       console.log('[ProjectsPage] fetches completed, processing data');
+
+      if (vendorsRes?.success && Array.isArray(vendorsRes.data)) {
+        setVendors(vendorsRes.data);
+      }
 
       let loadedClients: Client[] = [];
       if (clientsRes?.success) {
@@ -229,8 +237,8 @@ export default function ProjectsPage() {
                 : (lead.serviceType ? lead.serviceType.replace(/_/g, ' ') : 'Digital Platform');
               setFormTitle(`${lead.businessName} - ${svcTitle} Project`);
               setFormCategory(lead.businessCategory || 'AI & FULL-STACK WEB');
-              setFormTotalValue(String(lead.estimatedDealValue || 0));
-              setFormAdvanceRequired(String(Math.round((lead.estimatedDealValue || 0) * 0.4)));
+              setFormTotalValue(String(lead.estimatedDealValue || 150000));
+              setFormAdvanceRequired(String(Math.round((lead.estimatedDealValue || 150000) * 0.4)));
               setFormDescription(`Created from Won Lead: ${lead.businessName}. Contact: ${lead.leadName} (${lead.whatsappNumber}). Inquired Scope: ${lead.servicesInterested ? lead.servicesInterested.join(', ') : lead.serviceType || 'Custom Execution'}.`);
 
               const svcStr = (lead.serviceInterested || lead.serviceType || '').toLowerCase();
@@ -358,8 +366,8 @@ export default function ProjectsPage() {
           : (lead.serviceType ? lead.serviceType.replace(/_/g, ' ') : 'Project Execution');
         setFormTitle(`${lead.businessName} - ${svcTitle}`);
         setFormCategory(lead.businessCategory || 'AI & FULL-STACK WEB');
-        setFormTotalValue(String(lead.estimatedDealValue || 0));
-        setFormAdvanceRequired(String(Math.round((lead.estimatedDealValue || 0) * 0.4)));
+        setFormTotalValue(String(lead.estimatedDealValue || 150000));
+        setFormAdvanceRequired(String(Math.round((lead.estimatedDealValue || 150000) * 0.4)));
         setFormDescription(`Created from Won Lead: ${lead.businessName}. Contact: ${lead.leadName} (${lead.whatsappNumber}). Scope: ${lead.servicesInterested ? lead.servicesInterested.join(', ') : lead.serviceType}.`);
         const svcStr = (lead.serviceInterested || lead.serviceType || '').toLowerCase();
         let domain: 'SOFTWARE' | 'WEB' | 'AI' | 'MARKETING' = 'SOFTWARE';
@@ -395,11 +403,13 @@ export default function ProjectsPage() {
 
   const handleSaveProject = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSavingProject) return;
     if (!formTitle || !formClientId || !formTotalValue) {
       alert('Please fill in Project Title, Client, and Contract Value');
       return;
     }
 
+    setIsSavingProject(true);
     try {
       if (editingProject) {
         const res = await fetch('/api/projects', {
@@ -454,7 +464,15 @@ export default function ProjectsPage() {
         if (data.success) {
           setToastMessage(`🚀 New IT Project "${formTitle}" created successfully!`);
           setShowCreateModal(false);
+          setFormTitle('');
+          setFormClientId('');
+          setFormTotalValue('');
+          setFormAdvanceRequired('');
+          setFormDescription('');
           await loadData();
+          if (data.data) {
+            setOpenProject(data.data);
+          }
           window.dispatchEvent(new Event('crm-data-updated'));
           setTimeout(() => setToastMessage(null), 4000);
         }
@@ -462,6 +480,8 @@ export default function ProjectsPage() {
     } catch (err) {
       console.error(err);
       alert('Failed to save project');
+    } finally {
+      setIsSavingProject(false);
     }
   };
 
@@ -915,8 +935,8 @@ export default function ProjectsPage() {
           <button
             onClick={() => setActiveTab('OVERVIEW')}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${activeTab === 'OVERVIEW'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
           >
             Project Overview
@@ -925,8 +945,8 @@ export default function ProjectsPage() {
           <button
             onClick={() => setActiveTab('SOW')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center space-x-1.5 ${activeTab === 'SOW'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
           >
             <span>Scope Deliverables (SOW)</span>
@@ -938,8 +958,8 @@ export default function ProjectsPage() {
           <button
             onClick={() => setActiveTab('TASKS')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center space-x-1.5 ${activeTab === 'TASKS'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
           >
             <span>Sprint Tasks & Milestones</span>
@@ -951,8 +971,8 @@ export default function ProjectsPage() {
           <button
             onClick={() => setActiveTab('INVOICES')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center space-x-1.5 ${activeTab === 'INVOICES'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
           >
             <span>Client Invoices & Milestone Bills</span>
@@ -964,19 +984,21 @@ export default function ProjectsPage() {
           <button
             onClick={() => setActiveTab('EXPENSES')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center space-x-1.5 ${activeTab === 'EXPENSES'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
           >
-            <span>Cloud Costs & API Expenses</span>
-            <span className="bg-slate-100 text-slate-700 text-[10px] px-1.5 py-0.2 rounded-full">0</span>
+            <span>Project Expenses</span>
+            <span className="bg-slate-100 text-slate-700 text-[10px] px-1.5 py-0.2 rounded-full">
+              {vendors.filter(v => v.projectId === openProject?.id).length}
+            </span>
           </button>
 
           <button
             onClick={() => setActiveTab('DOCS')}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap flex items-center space-x-1.5 ${activeTab === 'DOCS'
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
+              ? 'bg-slate-900 text-white shadow-sm'
+              : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
           >
             <span>Architecture & SOW Documents</span>
@@ -1063,9 +1085,20 @@ export default function ProjectsPage() {
                 </div>
 
                 {/* Card 2: Overall Expenses */}
-                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5">
-                  <span className="text-xs text-slate-300 font-semibold block">Overall Expenses</span>
-                  <p className="text-lg font-black text-white font-mono mt-1">{formatINR(overallExpenses)}</p>
+                <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-300 font-semibold block">Overall Expenses</span>
+                      <Link
+                        href={`/vendors?projectId=${openProject.id}&openCreate=true`}
+                        className="inline-flex items-center space-x-1 px-2 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-[10px] font-bold shadow-sm transition"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add</span>
+                      </Link>
+                    </div>
+                    <p className="text-lg font-black text-white font-mono mt-1">{formatINR(overallExpenses)}</p>
+                  </div>
                   <span className="text-[11px] text-slate-400 font-medium block mt-1">
                     Direct: {formatINR(directExpenses)} + 18% Tax: {formatINR(internalGst)}
                   </span>
@@ -1135,10 +1168,10 @@ export default function ProjectsPage() {
                             <span className="text-xs font-bold text-slate-900">{ms.title}</span>
                             <span
                               className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${ms.status === 'COMPLETED'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : ms.status === 'IN_PROGRESS'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : 'bg-slate-200 text-slate-700'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : ms.status === 'IN_PROGRESS'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-slate-200 text-slate-700'
                                 }`}
                             >
                               {ms.status}
@@ -1354,17 +1387,133 @@ export default function ProjectsPage() {
             )}
 
             {/* EXPENSES TAB */}
-            {activeTab === 'EXPENSES' && (
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <h3 className="font-extrabold text-base text-slate-900">Cloud Infrastructure, Servers & API Costs</h3>
-                  <span className="text-xs text-slate-400">Total: {formatINR(expenses)}</span>
+            {activeTab === 'EXPENSES' && (() => {
+              const projExpenses = vendors.filter(v => v.projectId === openProject.id);
+              const totalExp = projExpenses.reduce((acc, v) => acc + (v.totalPayable || 0), 0);
+              const totalPaid = projExpenses.reduce((acc, v) => acc + (v.advancePaid || 0), 0);
+              const totalDue = projExpenses.reduce((acc, v) => acc + (v.balanceDue || 0), 0);
+
+              return (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                    <div>
+                      <h3 className="font-extrabold text-base text-slate-900">Project Expenses & Procurement</h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Direct domain registrations, cloud servers, ad networks, freelance developers, and influencer payouts incurred for this project.
+                      </p>
+                    </div>
+                    <Link
+                      href={`/vendors?projectId=${openProject.id}&openCreate=true`}
+                      className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-md shadow-amber-500/20 transition self-start sm:self-auto"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>+ Add Project Expense</span>
+                    </Link>
+                  </div>
+
+                  {/* Summary KPI Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Total Direct Expenses</span>
+                      <span className="text-base font-black text-slate-900 mt-1 block font-mono">{formatINR(totalExp)}</span>
+                      <span className="text-[10px] text-slate-400">Allocated to project budget</span>
+                    </div>
+
+                    <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-emerald-800 block">Disbursed / Paid</span>
+                      <span className="text-base font-black text-emerald-600 mt-1 block font-mono">{formatINR(totalPaid)}</span>
+                      <span className="text-[10px] text-emerald-700/80">Settled via banking/cards</span>
+                    </div>
+
+                    <div className="p-3 bg-rose-50/60 border border-rose-200 rounded-xl">
+                      <span className="text-[10px] uppercase font-bold text-rose-800 block">Balance Payable Due</span>
+                      <span className="text-base font-black text-rose-600 mt-1 block font-mono">{formatINR(totalDue)}</span>
+                      <span className="text-[10px] text-rose-700/80">Pending vendor disbursements</span>
+                    </div>
+                  </div>
+
+                  {/* Expenses List / Table */}
+                  {projExpenses.length === 0 ? (
+                    <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-xl space-y-3">
+                      <p className="text-xs text-slate-500 font-medium">
+                        No expenses or procurement logged specifically for this project yet.
+                      </p>
+                      <Link
+                        href={`/vendors?projectId=${openProject.id}&openCreate=true`}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add First Expense for {openProject.title}</span>
+                      </Link>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold tracking-wider">
+                          <tr>
+                            <th className="py-2.5 px-3">Platform / Partner</th>
+                            <th className="py-2.5 px-3">Category</th>
+                            <th className="py-2.5 px-3">Payment Mode</th>
+                            <th className="py-2.5 px-3 text-right">Committed</th>
+                            <th className="py-2.5 px-3 text-right">Disbursed</th>
+                            <th className="py-2.5 px-3 text-right">Balance Due</th>
+                            <th className="py-2.5 px-3 text-center">Status</th>
+                            <th className="py-2.5 px-3 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          {projExpenses.map((v) => {
+                            const isSettled = (v.balanceDue || 0) <= 0;
+                            return (
+                              <tr key={v.id} className="hover:bg-slate-50/80 transition">
+                                <td className="py-2.5 px-3">
+                                  <span className="font-bold text-slate-900 block">{v.companyName}</span>
+                                  {v.invoiceNumber && (
+                                    <span className="text-[10px] text-slate-400 font-mono">Ref: {v.invoiceNumber}</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
+                                  {v.serviceCategory.replace(/_/g, ' ')}
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
+                                    {v.paymentMode ? v.paymentMode.replace(/_/g, ' ') : 'Corporate Card'}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-black text-slate-900 font-mono">
+                                  {formatINR(v.totalPayable)}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-bold text-emerald-600 font-mono">
+                                  {formatINR(v.advancePaid)}
+                                </td>
+                                <td className="py-2.5 px-3 text-right font-black text-rose-600 font-mono">
+                                  {formatINR(v.balanceDue)}
+                                </td>
+                                <td className="py-2.5 px-3 text-center">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                    isSettled ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                                  }`}>
+                                    {isSettled ? 'SETTLED' : 'DUE'}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-right">
+                                  <Link
+                                    href={`/vendors?projectId=${openProject.id}`}
+                                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[10px] font-bold inline-block"
+                                  >
+                                    View in Payables
+                                  </Link>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
-                <p className="text-xs text-slate-500">
-                  Cloud server hosting (AWS/Vercel), LLM token quotas (OpenAI/Claude), third-party SaaS subscriptions, and domain certificates allocated to this project.
-                </p>
-              </div>
-            )}
+              );
+            })()}
 
             {/* SPRINT / DEV TIMESHEETS TAB */}
             {activeTab === 'SPRINT' && (
@@ -2390,9 +2539,17 @@ export default function ProjectsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl shadow-md shadow-amber-500/20"
+                  disabled={isSavingProject}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-bold rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-1.5 transition"
                 >
-                  {editingProject ? 'Save Changes' : 'Create Project'}
+                  {isSavingProject ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>{editingProject ? 'Saving Changes...' : 'Creating Project...'}</span>
+                    </>
+                  ) : (
+                    <span>{editingProject ? 'Save Changes' : 'Create Project'}</span>
+                  )}
                 </button>
               </div>
             </form>

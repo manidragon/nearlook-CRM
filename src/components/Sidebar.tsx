@@ -22,7 +22,8 @@ import {
   Receipt,
   UserCheck,
   ShieldCheck,
-  FolderArchive
+  FolderArchive,
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -42,7 +43,7 @@ interface NavGroup {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { currentStaff, isFieldStaff, hasModuleAccess, isOwnerOrAdmin, canManageUsers } = useAuth();
+  const { currentStaff, isFieldStaff, hasModuleAccess, isOwnerOrAdmin, canManageUsers, logout } = useAuth();
   const [recycleCount, setRecycleCount] = React.useState<number>(0);
   const [pendingApprovalsCount, setPendingApprovalsCount] = React.useState<number>(0);
 
@@ -115,7 +116,8 @@ export default function Sidebar() {
       group: 'Stores & Procurement',
       items: [
         { label: 'Materials & Inventory', href: '/inventory', icon: Boxes, badge: 'IT Assets', moduleKey: 'INVENTORY' },
-        { label: 'Vendor & Influencers', href: '/vendors', icon: Truck, badge: 'Payables', moduleKey: 'VENDORS' },
+        { label: 'Project Expenses', href: '/vendors', icon: Truck, badge: 'Expenses', moduleKey: 'VENDORS' },
+        { label: 'Influencer Directory', href: '/influencers', icon: Users, badge: 'Creators', moduleKey: 'VENDORS' },
       ],
     },
     {
@@ -243,8 +245,8 @@ export default function Sidebar() {
 
       {/* User profile footer */}
       <div className="p-3 border-t border-slate-800 bg-slate-950/50 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-bold text-amber-400 text-xs">
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center font-bold text-amber-400 text-xs shrink-0">
             {currentStaff.name.split(' ').map(n => n[0]).join('')}
           </div>
           <div className="overflow-hidden">
@@ -252,6 +254,13 @@ export default function Sidebar() {
             <div className="text-[10px] text-amber-400/90 font-medium uppercase truncate">{currentStaff.role.replace(/_/g, ' ')}</div>
           </div>
         </div>
+        <button
+          onClick={logout}
+          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800/80 rounded-lg transition shrink-0 cursor-pointer"
+          title="Sign Out / Logout"
+        >
+          <LogOut className="w-4 h-4" />
+        </button>
       </div>
     </aside>
   );

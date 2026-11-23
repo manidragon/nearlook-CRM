@@ -820,7 +820,7 @@ export const AIChatEngine = {
       DataService.getWhatsAppLogs().unshift({
         id: `wal-owner-${Date.now()}`,
         recipientPhone: '+919876543201',
-        recipientName: 'Rachel Adams (Owner)',
+        recipientName: 'Arun (Owner)',
         recipientType: 'STAFF',
         eventType: 'TASK_STATUS_UPDATE',
         messageBody: `✅ Executive Notification: ${taskTitle} for ${clientName} logged as COMPLETED by ${staff.name}. Automated update sent to client.`,
@@ -834,7 +834,7 @@ export const AIChatEngine = {
       responseText = `Task 'Video Shoot' marked as completed. Automated WhatsApp update sent to client ${clientDisplayName} and Owner.\n\n` +
         `**Task Status**: \`COMPLETED\` ✅\n` +
         `**Client**: ${clientName} (\`${clientPhone}\`)\n` +
-        `**Dispatched WhatsApp Logs**: Delivered to Client & Rachel Adams (Owner)\n` +
+        `**Dispatched WhatsApp Logs**: Delivered to Client & Arun (Owner)\n` +
         `**Updated By**: ${staff.name} (${staff.role.replace('_', ' ')})`;
 
       actionExecuted = {

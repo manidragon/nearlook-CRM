@@ -7,7 +7,8 @@ export type StaffRole =
   | 'FIELD_STAFF'
   | 'DESIGNER' 
   | 'CONTENT_WRITER' 
-  | 'MARKETER';
+  | 'MARKETER'
+  | (string & {});
 
 export type StaffTeam = 
   | 'MANAGEMENT'
@@ -16,7 +17,8 @@ export type StaffTeam =
   | 'MARKETING'
   | 'DESIGN'
   | 'CONTENT'
-  | 'FIELD_STAFF';
+  | 'FIELD_STAFF'
+  | (string & {});
 
 export type StaffStatus = 'ACTIVE' | 'INACTIVE';
 
@@ -59,9 +61,22 @@ export interface TaskProofFile {
   id: string;
   name: string;
   url: string;
+  dataUrl?: string; // Uploaded local image / screenshot base64
   uploadedAt: string;
   fileSize?: string;
   notes?: string;
+}
+
+export interface TaskNote {
+  id: string;
+  author: string;
+  role?: string;
+  message: string;
+  createdAt: string;
+  authorId?: string;
+  authorName?: string;
+  authorRole?: string;
+  note?: string;
 }
 
 export type LeaveType = 'CASUAL' | 'SICK' | 'PAID' | 'UNPAID';
@@ -504,6 +519,7 @@ export interface Task {
   order: number;
   subTasks: SubTask[];
   proofFiles?: TaskProofFile[];
+  notesTrail?: TaskNote[];
   completionNotes?: string;
   sharedWithClientAt?: string;
   createdAt: string;
@@ -544,7 +560,7 @@ export interface InvoicePaymentInstallment {
   amount: number;
   dueDate: string;
   paidAmount?: number;
-  status: 'PAID' | 'PENDING' | 'OVERDUE';
+  status: 'PAID' | 'PENDING' | 'OVERDUE' | 'PARTIALLY_PAID';
   paidDate?: string;
   paymentMethod?: string;
   referenceId?: string;
@@ -619,15 +635,40 @@ export type ExpenseCategory =
 
 export type VendorType = 'VENDOR' | 'INFLUENCER' | 'FREELANCER';
 
+export interface Influencer {
+  id: string;
+  name: string;
+  handle: string;
+  platform: 'Instagram' | 'YouTube' | 'LinkedIn' | 'Twitter/X' | 'TikTok' | string;
+  phone?: string;
+  email?: string;
+  category: string;
+  followersCount: string;
+  standardRate: number;
+  bankDetails?: string;
+  upiId?: string;
+  address?: string;
+  notes?: string;
+  status: 'ACTIVE' | 'INACTIVE';
+  totalPaidToDate?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Vendor {
   id: string;
   companyName: string;
   contactPerson?: string;
-  phone: string;
+  phone?: string;
   email?: string;
   bankDetails?: string;
   vendorType?: VendorType;
   serviceCategory: string;
+  projectId?: string;
+  projectName?: string;
+  clientName?: string;
+  influencerId?: string;
+  influencerName?: string;
   totalPayable: number;
   advancePaid: number;
   balanceDue: number;
@@ -638,6 +679,10 @@ export interface Vendor {
   dueDate?: string;
   platform?: string;
   followerCount?: string;
+  paymentMode?: string;
+  invoiceNumber?: string;
+  receiptUrl?: string;
+  notes?: string;
   createdAt: string;
   updatedAt: string;
 }

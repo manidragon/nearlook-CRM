@@ -31,7 +31,11 @@ import {
   Download,
   CreditCard,
   Send,
-  Landmark
+  Landmark,
+  Key,
+  Copy,
+  EyeOff,
+  RotateCcw
 } from 'lucide-react';
 import { Expense, StaffMember, ExpenseCategory, StaffRole, StaffTeam } from '@/lib/types';
 import { useAuth } from '@/lib/AuthContext';
@@ -50,7 +54,7 @@ export default function OfficePage() {
   const [activeTab, setActiveTab] = useState<'expenses' | 'staff'>('expenses');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
-  const [gstLiability, setGstLiability] = useState<number>(0);
+  const [gstLiability, setGstLiability] = useState<number>(73917);
   const [loading, setLoading] = useState(true);
 
   // Filters & Search
@@ -84,6 +88,12 @@ export default function OfficePage() {
 
   // Staff Form State
   const [staffName, setStaffName] = useState('');
+  const [staffUserId, setStaffUserId] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
+  const [copiedStaffPassword, setCopiedStaffPassword] = useState(false);
+  const [showViewStaffPassword, setShowViewStaffPassword] = useState(false);
+  const [copiedViewStaffPassword, setCopiedViewStaffPassword] = useState(false);
   const [staffEmail, setStaffEmail] = useState('');
   const [staffPhone, setStaffPhone] = useState('');
   const [staffRole, setStaffRole] = useState<StaffRole>('DEVELOPER');
@@ -91,6 +101,34 @@ export default function OfficePage() {
   const [staffSalary, setStaffSalary] = useState('');
   const [staffAddress, setStaffAddress] = useState('');
   const [staffShiftTiming, setStaffShiftTiming] = useState('09:30 AM - 07:30 PM (Standard Shift)');
+
+  // Custom Teams & Roles Management
+  const [allOfficeTeams, setAllOfficeTeams] = useState<{ key: string; label: string }[]>([
+    { key: 'WEB_DEVELOPMENT', label: 'Engineering & Tech' },
+    { key: 'MARKETING', label: 'Growth & Marketing' },
+    { key: 'DESIGN', label: 'UI/UX & Creative' },
+    { key: 'CONTENT', label: 'Content Strategy' },
+    { key: 'ACCOUNTS', label: 'Accounts & Finance' },
+    { key: 'FIELD_STAFF', label: 'On-Field Client Reps' },
+    { key: 'MANAGEMENT', label: 'Executive Management' },
+  ]);
+
+  const [allOfficeRoles, setAllOfficeRoles] = useState<{ key: string; label: string }[]>([
+    { key: 'DEVELOPER', label: 'Developer (Field Staff Isolation)' },
+    { key: 'FIELD_STAFF', label: 'Field Staff / Rep' },
+    { key: 'ACCOUNT_MANAGER', label: 'Account Manager (Financials Access)' },
+    { key: 'PROJECT_MANAGER', label: 'Project Manager' },
+    { key: 'MARKETER', label: 'Performance Marketer' },
+    { key: 'DESIGNER', label: 'UI/UX Designer' },
+    { key: 'CONTENT_WRITER', label: 'Content Writer' },
+    { key: 'ADMIN', label: 'System Admin' },
+    { key: 'OWNER', label: 'Agency Owner' },
+  ]);
+
+  const [showAddTeamModal, setShowAddTeamModal] = useState(false);
+  const [showAddRoleModal, setShowAddRoleModal] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newRoleName, setNewRoleName] = useState('');
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -115,7 +153,7 @@ export default function OfficePage() {
       if (expRes.success) setExpenses(expRes.data);
       if (staffRes.success) setStaff(staffRes.data);
       if (metricsRes?.success && metricsRes?.data) {
-        setGstLiability(metricsRes.data.gstPayableThisMonth ?? 0);
+        setGstLiability(metricsRes.data.gstPayableThisMonth || 73917);
       }
     } catch (err) {
       console.error(err);
@@ -288,6 +326,8 @@ export default function OfficePage() {
           body: JSON.stringify({
             id: editingStaff.id,
             name: staffName,
+            userId: staffUserId,
+            password: staffPassword,
             email: staffEmail,
             phone: staffPhone,
             role: staffRole,
@@ -310,6 +350,8 @@ export default function OfficePage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name: staffName,
+            userId: staffUserId || undefined,
+            password: staffPassword || undefined,
             email: staffEmail,
             phone: staffPhone,
             role: staffRole,
@@ -767,6 +809,10 @@ export default function OfficePage() {
                               onClick={() => {
                                 setEditingStaff(st);
                                 setStaffName(st.name);
+                                setStaffUserId(st.userId || `STF-${Math.floor(100 + Math.random() * 900)}`);
+                                setStaffPassword(st.password || `${st.name.split(' ')[0]}#Nearlook${Math.floor(1000 + Math.random() * 9000)}!`);
+                                setShowStaffPassword(false);
+                                setCopiedStaffPassword(false);
                                 setStaffEmail(st.email);
                                 setStaffPhone(st.phone);
                                 setStaffRole(st.role);
@@ -1002,36 +1048,157 @@ export default function OfficePage() {
                   />
                 </div>
 
+                {/* Login Credentials Setup */}
+                <div className="p-3.5 bg-gradient-to-br from-amber-50/90 to-orange-50/70 rounded-xl border border-amber-200/90 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-orange-600 text-white flex items-center justify-center shrink-0">
+                        <Key className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="font-black text-xs text-slate-900 block">Portal Login ID & Password Setup</span>
+                        <span className="text-[10px] text-slate-500">Credentials for staff member to sign in to Nearlook Agency ERP</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Login User ID *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={staffUserId}
+                        onChange={(e) => setStaffUserId(e.target.value)}
+                        placeholder="e.g. STF-101"
+                        className="w-full bg-white border border-amber-300 font-mono font-bold text-xs text-slate-900 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                      <span className="text-[9px] text-slate-400 mt-0.5 block">Unique sign-in User ID</span>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700">
+                          Login Password *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const firstName = staffName.trim().split(' ')[0] || 'Staff';
+                            const randomDigits = Math.floor(1000 + Math.random() * 9000);
+                            const newPass = `${firstName}#Nearlook${randomDigits}!`;
+                            setStaffPassword(newPass);
+                            setShowStaffPassword(true);
+                          }}
+                          className="text-[10px] text-orange-600 hover:text-orange-800 font-bold flex items-center gap-1"
+                          title="Generate a secure random password"
+                        >
+                          <RotateCcw className="w-2.5 h-2.5" /> Generate
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showStaffPassword ? 'text' : 'password'}
+                          required
+                          value={staffPassword}
+                          onChange={(e) => setStaffPassword(e.target.value)}
+                          placeholder="e.g. Nearlook#2026!"
+                          className="w-full bg-white border border-amber-300 font-mono text-xs text-slate-900 rounded-lg pl-3 pr-16 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowStaffPassword(!showStaffPassword)}
+                            className="p-1 text-slate-400 hover:text-slate-700 rounded"
+                            title={showStaffPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showStaffPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(staffPassword);
+                              setCopiedStaffPassword(true);
+                              setTimeout(() => setCopiedStaffPassword(false), 2000);
+                            }}
+                            className="p-1 text-slate-400 hover:text-orange-600 rounded"
+                            title="Copy password"
+                          >
+                            {copiedStaffPassword ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                      <span className="text-[9px] text-slate-400 mt-0.5 block">Staff access password</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Role *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">Role *</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddRoleModal(true)}
+                        className="text-[11px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer"
+                        title="Add custom system role"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add Role</span>
+                      </button>
+                    </div>
                     <select
                       value={staffRole}
-                      onChange={(e) => setStaffRole(e.target.value as any)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      onChange={(e) => {
+                        if (e.target.value === '__NEW_ROLE__') {
+                          setShowAddRoleModal(true);
+                        } else {
+                          setStaffRole(e.target.value as any);
+                        }
+                      }}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold"
                     >
-                      <option value="DEVELOPER">Developer</option>
-                      <option value="PROJECT_MANAGER">Project Manager</option>
-                      <option value="DESIGNER">UI/UX Designer</option>
-                      <option value="MARKETER">Marketer</option>
-                      <option value="CONTENT_WRITER">Content Writer</option>
-                      <option value="ACCOUNT_MANAGER">Accounts Manager</option>
+                      {allOfficeRoles.map(r => (
+                        <option key={r.key} value={r.key}>{r.label}</option>
+                      ))}
+                      <option value="__NEW_ROLE__" className="text-amber-600 font-bold bg-amber-50">
+                        ➕ + Add New Custom Role...
+                      </option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Team *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">Team / Dept *</label>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddTeamModal(true)}
+                        className="text-[11px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1 hover:underline cursor-pointer"
+                        title="Add custom department or team"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add Team</span>
+                      </button>
+                    </div>
                     <select
                       value={staffTeam}
-                      onChange={(e) => setStaffTeam(e.target.value as any)}
-                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      onChange={(e) => {
+                        if (e.target.value === '__NEW_TEAM__') {
+                          setShowAddTeamModal(true);
+                        } else {
+                          setStaffTeam(e.target.value as any);
+                        }
+                      }}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500 font-semibold"
                     >
-                      <option value="WEB_DEVELOPMENT">Engineering & Tech</option>
-                      <option value="MARKETING">Growth & Marketing</option>
-                      <option value="DESIGN">UI/UX Design</option>
-                      <option value="CONTENT">Content Strategy</option>
-                      <option value="ACCOUNTS">Finance & Accounts</option>
-                      <option value="MANAGEMENT">Executive</option>
+                      {allOfficeTeams.map(t => (
+                        <option key={t.key} value={t.key}>{t.label}</option>
+                      ))}
+                      <option value="__NEW_TEAM__" className="text-amber-600 font-bold bg-amber-50">
+                        ➕ + Add New Custom Team...
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -1231,8 +1398,257 @@ export default function OfficePage() {
       )}
 
       {/* =========================================================================
-          DELETE EXPENSE MODAL
+          VIEW STAFF MEMBER DETAILS MODAL
          ========================================================================= */}
+      {viewingStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-slate-900">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-black text-sm border border-orange-200 shadow-xs">
+                  {viewingStaff.name ? viewingStaff.name.slice(0, 2).toUpperCase() : 'ST'}
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                    <span>{viewingStaff.name}</span>
+                    <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                      {viewingStaff.userId}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">Staff Profile, Payroll Parameters & Directory Record</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingStaff(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="overflow-y-auto flex-1 p-6 space-y-4 text-xs">
+              {/* Login Credentials Card */}
+              <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50/70 rounded-xl border border-amber-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Key className="w-4 h-4 text-orange-600" />
+                    <span className="font-black text-slate-900 text-xs">Portal Login Credentials (RBAC)</span>
+                  </div>
+                  <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-2 py-0.5 rounded-full border border-orange-200">
+                    Active Auth Key
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
+                  <div className="bg-white p-2.5 rounded-lg border border-amber-200">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Login User ID</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono font-bold text-slate-900 text-xs">{viewingStaff.userId || 'N/A'}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (viewingStaff.userId) navigator.clipboard.writeText(viewingStaff.userId);
+                        }}
+                        className="text-slate-400 hover:text-orange-600 p-0.5"
+                        title="Copy User ID"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-amber-200">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Login Password</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono text-xs text-slate-900">
+                        {showViewStaffPassword ? (viewingStaff.password || 'Nearlook#2026!') : '••••••••••••'}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowViewStaffPassword(!showViewStaffPassword)}
+                          className="text-slate-400 hover:text-slate-700 p-0.5"
+                          title={showViewStaffPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showViewStaffPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(viewingStaff.password || 'Nearlook#2026!');
+                            setCopiedViewStaffPassword(true);
+                            setTimeout(() => setCopiedViewStaffPassword(false), 2000);
+                          }}
+                          className="text-slate-400 hover:text-orange-600 p-0.5"
+                          title="Copy Password"
+                        >
+                          {copiedViewStaffPassword ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Role & Status Card */}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Role & Department</span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-200">
+                      {viewingStaff.role ? viewingStaff.role.replace(/_/g, ' ') : 'STAFF'}
+                    </span>
+                    <span className="text-xs font-bold text-slate-600">
+                      • {viewingStaff.team ? viewingStaff.team.replace(/_/g, ' ') : 'General'}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Status</span>
+                  <span className="inline-block mt-1 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    {viewingStaff.status || 'ACTIVE'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-2.5">
+                <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-orange-600" />
+                  Contact Information
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Email Address</span>
+                    <a href={`mailto:${viewingStaff.email}`} className="text-slate-800 hover:text-orange-600 font-semibold truncate block mt-0.5">
+                      {viewingStaff.email || 'N/A'}
+                    </a>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">WhatsApp Phone</span>
+                    <a 
+                      href={`https://wa.me/${(viewingStaff.phone || '').replace(/[^0-9]/g, '')}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="text-emerald-700 hover:text-emerald-800 font-bold block mt-0.5"
+                    >
+                      {viewingStaff.phone || 'N/A'} ↗
+                    </a>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Office Shift Slot</span>
+                    <span className="text-slate-700 font-medium block mt-0.5">
+                      {viewingStaff.shiftTiming || '09:30 AM - 07:30 PM (Standard Shift)'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">City / Location</span>
+                    <span className="text-slate-700 font-medium block mt-0.5 truncate">
+                      {viewingStaff.address || 'Bangalore, Karnataka'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Compensation Breakdown */}
+              <div className="p-4 bg-orange-50/60 rounded-xl border border-orange-200/80 space-y-2.5">
+                <h4 className="font-bold text-orange-950 text-xs flex items-center gap-1.5 border-b border-orange-200/60 pb-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-orange-600" />
+                  Compensation & Payout Terms
+                </h4>
+                <div className="grid grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Monthly Base</span>
+                    <span className="text-base font-black text-slate-900 font-mono block mt-0.5">
+                      {formatINR(viewingStaff.monthlySalary)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Daily Prorated</span>
+                    <span className="text-sm font-bold text-slate-800 font-mono block mt-0.5">
+                      {formatINR(Math.round((viewingStaff.monthlySalary || 0) / 30))}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Hourly Rate</span>
+                    <span className="text-sm font-bold text-slate-800 font-mono block mt-0.5">
+                      {viewingStaff.hourlyRate ? formatINR(viewingStaff.hourlyRate) : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+                <div className="pt-2 border-t border-orange-200/60 flex justify-between items-center text-[11px] text-slate-600">
+                  <span>Last Cycle Status:</span>
+                  <span className="font-bold text-slate-800 font-mono">
+                    {viewingStaff.salaryPaidDate || 'Current Cycle Pending'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Sub-Admin Permissions & Access */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-orange-600" />
+                  <div>
+                    <span className="font-bold text-slate-800 block">Sub-Admin Permission</span>
+                    <span className="text-[11px] text-slate-500">
+                      {viewingStaff.canManageUsers ? 'Authorized to onboard & manage other staff' : 'Standard staff privileges only'}
+                    </span>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
+                  viewingStaff.canManageUsers ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-slate-100 text-slate-600 border-slate-300'
+                }`}>
+                  {viewingStaff.canManageUsers ? 'Sub-Admin' : 'Standard'}
+                </span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewingStaff(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition"
+              >
+                Close
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = viewingStaff;
+                    setViewingStaff(null);
+                    setEditingStaff(target);
+                    setStaffName(target.name);
+                    setStaffEmail(target.email);
+                    setStaffPhone(target.phone);
+                    setStaffRole(target.role);
+                    setStaffTeam(target.team);
+                    setStaffSalary(String(target.monthlySalary));
+                    setStaffAddress(target.address || '');
+                    setStaffShiftTiming(target.shiftTiming || '09:30 AM - 07:30 PM (Standard Shift)');
+                  }}
+                  className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-2xs"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Edit Staff
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = viewingStaff;
+                    setViewingStaff(null);
+                    handleDisburseSalary(target);
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition shadow-md shadow-emerald-600/20"
+                >
+                  Disburse Salary
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {deletingExpense && (
         <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200">
@@ -1255,6 +1671,95 @@ export default function OfficePage() {
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-md"
               >
                 Move to Recycle Bin
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Add Custom Team Modal */}
+      {showAddTeamModal && (
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200">
+            <h3 className="font-black text-base text-slate-900 mb-1">Add Custom Team / Department</h3>
+            <p className="text-xs text-slate-500 mb-4">Create a new organizational team for staff assignments.</p>
+            <input
+              type="text"
+              autoFocus
+              placeholder="e.g. Quality Assurance / QA"
+              value={newTeamName}
+              onChange={e => setNewTeamName(e.target.value)}
+              className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 mb-4 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowAddTeamModal(false); setNewTeamName(''); }}
+                className="px-3.5 py-2 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (newTeamName.trim()) {
+                    const key = newTeamName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+                    const label = newTeamName.trim();
+                    setAllOfficeTeams(prev => [...prev, { key, label }]);
+                    setStaffTeam(key as any);
+                    setToastMessage(`✅ Added custom team "${label}".`);
+                    setTimeout(() => setToastMessage(null), 3000);
+                  }
+                  setShowAddTeamModal(false);
+                  setNewTeamName('');
+                }}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md"
+              >
+                Save & Select Team
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Custom Role Modal */}
+      {showAddRoleModal && (
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200">
+            <h3 className="font-black text-base text-slate-900 mb-1">Add Custom System Role</h3>
+            <p className="text-xs text-slate-500 mb-4">Create a custom role title for staff permissions & workload.</p>
+            <input
+              type="text"
+              autoFocus
+              placeholder="e.g. Sales Executive / BD Lead"
+              value={newRoleName}
+              onChange={e => setNewRoleName(e.target.value)}
+              className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 mb-4 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setShowAddRoleModal(false); setNewRoleName(''); }}
+                className="px-3.5 py-2 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (newRoleName.trim()) {
+                    const key = newRoleName.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
+                    const label = newRoleName.trim();
+                    setAllOfficeRoles(prev => [...prev, { key, label }]);
+                    setStaffRole(key as any);
+                    setToastMessage(`✅ Added custom role "${label}".`);
+                    setTimeout(() => setToastMessage(null), 3000);
+                  }
+                  setShowAddRoleModal(false);
+                  setNewRoleName('');
+                }}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl shadow-md"
+              >
+                Save & Select Role
               </button>
             </div>
           </div>

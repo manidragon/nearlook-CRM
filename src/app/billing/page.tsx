@@ -125,22 +125,20 @@ export default function ClientBillingPage() {
     type: 'MILESTONE_WEB_DEV' as InvoiceType,
     subtotal: '',
     gstType: 'NO_GST' as GSTType,
-    dueDate: '2026-11-22',
+    dueDate: '2026-11-25',
     notes: 'Official master invoice. Milestone payments credited upon verification.',
     lineItemDescription: 'Custom IT, Web & Cloud Development Deliverables',
     // Partial payment fields
     initialPaymentLabel: '1st Payment - Advance',
-    initialPaymentAmount: '200000',
-    initialPaymentDate: '2026-11-18',
+    initialPaymentAmount: '',
+    initialPaymentDate: new Date().toISOString().split('T')[0],
+    initialPaymentMode: 'UPI / Bank Transfer',
+    initialPaymentRef: '',
     // Next scheduled installment
-    nextScheduledPaymentAmount: '100000',
-    nextScheduledDueDate: '2026-11-22',
-    // Additional installments
-    installments: [
-      { id: 'inst-1', label: '1st Payment - Advance', amount: 200000, dueDate: '2026-11-18', paidAmount: 200000, status: 'PAID' as const, paidDate: '2026-11-18', paymentMethod: 'Bank Transfer / NEFT' },
-      { id: 'inst-2', label: '2nd Payment - Milestone 1 Delivery', amount: 100000, dueDate: '2026-11-22', paidAmount: 0, status: 'PENDING' as const, paymentMethod: 'UPI / Bank Transfer' },
-      { id: 'inst-3', label: '3rd Payment - Final Deployment & Handover', amount: 110650, dueDate: '2026-12-10', paidAmount: 0, status: 'PENDING' as const, paymentMethod: 'UPI / Bank Transfer' }
-    ] as InvoicePaymentInstallment[],
+    nextScheduledPaymentAmount: '',
+    nextScheduledDueDate: '',
+    // Dynamic installments starting clean
+    installments: [] as InvoicePaymentInstallment[],
     delayReason: 'NONE' as 'NONE' | 'OUR_MISTAKE_PROJECT_DELAY' | 'CLIENT_DELAY' | 'MUTUAL_AGREEMENT',
     delayNotes: '',
     isOnHold: false,
@@ -172,19 +170,34 @@ export default function ClientBillingPage() {
   });
   const [savingInvoiceEdit, setSavingInvoiceEdit] = useState(false);
 
-  // Requirement 1 & 2: Real-time Live Balance Computations for Forms
+  // Requirement 1 & 2: Helpers for Installment Allocation & Paid Calculations
+  const computeAllocated = (insts: InvoicePaymentInstallment[]) =>
+    insts.reduce((sum, inst) => sum + Number(inst.amount || 0), 0);
+
+  const computePaid = (insts: InvoicePaymentInstallment[]) =>
+    insts.reduce((sum, inst) => {
+      if (inst.status === 'PAID') return sum + Number(inst.paidAmount || inst.amount || 0);
+      if (inst.status === 'PARTIALLY_PAID') return sum + Number(inst.paidAmount || 0);
+      return sum;
+    }, 0);
+
+  // Edit Invoice live values
   const editContractValue = Number(editInvoiceForm.amount || 0);
-  const editTotalPaid = editInvoiceForm.installments.reduce((sum, inst) =>
-    sum + (inst.status === 'PAID' ? Number(inst.paidAmount || inst.amount || 0) : 0), 0
-  );
+  const editTotalPaid = computePaid(editInvoiceForm.installments);
   const editLiveBalance = Math.max(0, editContractValue - editTotalPaid);
+  const editTotalAllocated = computeAllocated(editInvoiceForm.installments);
+  const editUnallocatedBalance = Math.max(0, editContractValue - editTotalAllocated);
   const isEditNextScheduledOverAllocated = Number(editInvoiceForm.nextScheduledPaymentAmount || 0) > editLiveBalance;
 
-  const newContractValue = Number(newInvoiceForm.subtotal || 0);
-  const newTotalPaid = newInvoiceForm.installments.reduce((sum, inst) =>
-    sum + (inst.status === 'PAID' ? Number(inst.paidAmount || inst.amount || 0) : 0), 0
-  );
+  // New Invoice live values
+  const newBaseSubtotal = Number(newInvoiceForm.subtotal || 0);
+  const newContractValue = newInvoiceForm.gstType === 'ADDITIONAL_18'
+    ? Math.round(newBaseSubtotal * 1.18)
+    : newBaseSubtotal;
+  const newTotalPaid = computePaid(newInvoiceForm.installments);
   const newLiveBalance = Math.max(0, newContractValue - newTotalPaid);
+  const newTotalAllocated = computeAllocated(newInvoiceForm.installments);
+  const newUnallocatedBalance = Math.max(0, newContractValue - newTotalAllocated);
   const isNewNextScheduledOverAllocated = Number(newInvoiceForm.nextScheduledPaymentAmount || 0) > newLiveBalance;
 
   const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
@@ -406,11 +419,51 @@ export default function ClientBillingPage() {
   // Edit Master Invoice Handlers
   const handleOpenEditInvoiceModal = (inv: Invoice) => {
     setEditingInvoice(inv);
+    const contractVal = Number(inv.totalAmount || inv.amount || inv.subtotal || 0);
+
+    let insts: InvoicePaymentInstallment[] = [];
+    if (inv.installments && inv.installments.length > 0) {
+      insts = inv.installments.map(i => ({ ...i }));
+    } else {
+      const pAmt = Math.min(inv.paidAmount || 0, contractVal);
+      const bAmt = Math.max(0, contractVal - pAmt);
+      insts = [
+        {
+          id: `inst-1`,
+          label: '1st Payment - Advance',
+          amount: pAmt > 0 ? pAmt : Math.round(contractVal / 2),
+          dueDate: inv.dueDate || '2026-11-18',
+          paidAmount: pAmt,
+          status: pAmt >= contractVal && contractVal > 0 ? 'PAID' : (pAmt > 0 ? 'PARTIALLY_PAID' : 'PENDING'),
+          paidDate: pAmt > 0 ? (inv.issueDate || '2026-11-18') : undefined,
+          paymentMethod: 'UPI / Bank Transfer',
+          referenceId: ''
+        }
+      ];
+      if (bAmt > 0) {
+        insts.push({
+          id: `inst-2`,
+          label: '2nd Payment - Milestone Balance',
+          amount: bAmt,
+          dueDate: inv.dueDate || '2026-11-25',
+          paidAmount: 0,
+          status: 'PENDING',
+          paymentMethod: 'UPI / Bank Transfer',
+          referenceId: ''
+        });
+      }
+    }
+
+    const currentPaidSum = computePaid(insts);
+    const autoStatus = (currentPaidSum >= contractVal && contractVal > 0)
+      ? 'PAID'
+      : (currentPaidSum > 0 ? 'PARTIALLY_PAID' : 'PENDING');
+
     setEditInvoiceForm({
       invoiceNumber: inv.invoiceNumber,
-      amount: String(inv.totalAmount || inv.amount || inv.subtotal),
+      amount: String(contractVal),
       dueDate: inv.dueDate || '',
-      status: inv.status || 'PENDING',
+      status: autoStatus,
       notes: inv.notes || '',
       lateFeeAssigned: Boolean(inv.lateFeeAssigned),
       delayReason: (inv.delayReason as any) || 'NONE',
@@ -419,15 +472,12 @@ export default function ClientBillingPage() {
       holdReason: inv.holdReason || '',
       nextScheduledPaymentAmount: inv.nextScheduledPaymentAmount ? String(inv.nextScheduledPaymentAmount) : '',
       nextScheduledDueDate: inv.nextScheduledDueDate || '',
-      installments: inv.installments ? [...inv.installments] : [
-        { id: 'inst-1', label: '1st Payment - Advance', amount: inv.paidAmount || 0, dueDate: inv.dueDate || '2026-11-18', paidAmount: inv.paidAmount || 0, status: (inv.paidAmount && inv.paidAmount > 0 ? 'PAID' : 'PENDING'), paymentMethod: 'Bank Transfer / NEFT' },
-        { id: 'inst-2', label: '2nd Payment - Milestone Balance', amount: (inv.balanceDue || 0), dueDate: '2026-11-22', paidAmount: 0, status: 'PENDING', paymentMethod: 'UPI / Bank Transfer' }
-      ]
+      installments: insts
     });
   };
 
-  // Requirement 1: Live Status Change & Recalculation Handler
-  const handleEditInstallmentStatusChange = (idx: number, newStatus: 'PAID' | 'PENDING' | 'OVERDUE') => {
+  // Requirement 1: Live Status Change & Recalculation Handler with PARTIALLY_PAID support
+  const handleEditInstallmentStatusChange = (idx: number, newStatus: 'PAID' | 'PARTIALLY_PAID' | 'PENDING' | 'OVERDUE') => {
     const updated = [...editInvoiceForm.installments];
     const target = updated[idx];
     target.status = newStatus;
@@ -436,19 +486,25 @@ export default function ClientBillingPage() {
       target.paidAmount = target.amount;
       if (!target.paidDate) target.paidDate = new Date().toISOString().split('T')[0];
       if (!target.paymentMethod) target.paymentMethod = 'UPI / Bank Transfer';
+    } else if (newStatus === 'PARTIALLY_PAID') {
+      if (!target.paidAmount || target.paidAmount === 0 || target.paidAmount === target.amount) {
+        target.paidAmount = Math.round(target.amount / 2);
+      }
+      if (!target.paidDate) target.paidDate = new Date().toISOString().split('T')[0];
+      if (!target.paymentMethod) target.paymentMethod = 'UPI / Bank Transfer';
     } else if (newStatus === 'PENDING') {
       target.paidAmount = 0;
     }
 
     // Recalculate live total paid and live balance
-    const updatedPaid = updated.reduce((s, it) => s + (it.status === 'PAID' ? Number(it.paidAmount || it.amount || 0) : 0), 0);
+    const updatedPaid = computePaid(updated);
     const updatedBal = Math.max(0, editContractValue - updatedPaid);
 
     // Automatically cap next scheduled payment amount to remaining balance
     const currentNext = Number(editInvoiceForm.nextScheduledPaymentAmount || 0);
     const cappedNext = Math.min(currentNext, updatedBal);
 
-    // Auto-advance invoice status
+    // Auto-advance invoice commercial status
     let autoStatus = editInvoiceForm.status;
     if (updatedBal === 0 && updatedPaid > 0) {
       autoStatus = 'PAID';
@@ -466,6 +522,149 @@ export default function ClientBillingPage() {
     });
 
     showNotification(`⚡ Real-time ledger updated: Remaining Balance is ${formatINR(updatedBal)}`, 'info');
+  };
+
+  const handleEditInstallmentAmountChange = (idx: number, newAmt: number) => {
+    const updated = [...editInvoiceForm.installments];
+    updated[idx].amount = newAmt;
+    if (updated[idx].status === 'PAID') {
+      updated[idx].paidAmount = newAmt;
+    }
+    const updatedPaid = computePaid(updated);
+    const updatedBal = Math.max(0, editContractValue - updatedPaid);
+    let autoStatus = editInvoiceForm.status;
+    if (updatedBal === 0 && updatedPaid > 0) autoStatus = 'PAID';
+    else if (updatedPaid > 0) autoStatus = 'PARTIALLY_PAID';
+    else autoStatus = 'PENDING';
+
+    setEditInvoiceForm({
+      ...editInvoiceForm,
+      installments: updated,
+      status: autoStatus
+    });
+  };
+
+  const handleEditInstallmentPaidAmountChange = (idx: number, paidAmt: number) => {
+    const updated = [...editInvoiceForm.installments];
+    updated[idx].paidAmount = paidAmt;
+    if (paidAmt >= updated[idx].amount && updated[idx].amount > 0) {
+      updated[idx].status = 'PAID';
+    } else if (paidAmt > 0) {
+      updated[idx].status = 'PARTIALLY_PAID';
+    } else {
+      updated[idx].status = 'PENDING';
+    }
+    const updatedPaid = computePaid(updated);
+    const updatedBal = Math.max(0, editContractValue - updatedPaid);
+    let autoStatus = editInvoiceForm.status;
+    if (updatedBal === 0 && updatedPaid > 0) autoStatus = 'PAID';
+    else if (updatedPaid > 0) autoStatus = 'PARTIALLY_PAID';
+    else autoStatus = 'PENDING';
+
+    setEditInvoiceForm({
+      ...editInvoiceForm,
+      installments: updated,
+      status: autoStatus
+    });
+  };
+
+  const handleAddEditInstallment = () => {
+    // 1. If any previous installment had a partial payment, clamp its milestone to what was collected
+    const currentInsts = editInvoiceForm.installments.map(inst => {
+      const copy = { ...inst };
+      if (copy.status === 'PARTIALLY_PAID' && copy.paidAmount !== undefined && copy.paidAmount > 0) {
+        copy.amount = copy.paidAmount;
+        copy.status = 'PAID';
+      }
+      return copy;
+    });
+
+    // 2. Sum collected so far
+    const totalCollected = currentInsts.reduce((sum, inst) => {
+      if (inst.status === 'PAID') return sum + (inst.paidAmount || inst.amount || 0);
+      return sum + (inst.paidAmount || 0);
+    }, 0);
+
+    const unallocated = Math.max(0, editContractValue - totalCollected);
+    const count = currentInsts.length + 1;
+    const ordinal = count === 2 ? '2nd' : count === 3 ? '3rd' : `${count}th`;
+    const newInst: InvoicePaymentInstallment = {
+      id: `inst-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      label: `${ordinal} Payment - Milestone Balance`,
+      amount: unallocated, // Pre-fills suggested remaining unallocated balance!
+      paidAmount: 0,
+      dueDate: editInvoiceForm.dueDate || new Date().toISOString().split('T')[0],
+      status: 'PENDING',
+      paymentMethod: 'UPI / Bank Transfer',
+      referenceId: ''
+    };
+    setEditInvoiceForm(prev => ({
+      ...prev,
+      installments: [...currentInsts, newInst]
+    }));
+    showNotification(`Added ${ordinal} installment with suggested balance of ${formatINR(unallocated)}`, 'info');
+  };
+
+  const handleRemoveEditInstallment = (idx: number) => {
+    if (editInvoiceForm.installments.length <= 1) return;
+    const updated = editInvoiceForm.installments.filter((_, i) => i !== idx);
+    const updatedPaid = computePaid(updated);
+    let autoStatus = editInvoiceForm.status;
+    if (updatedPaid >= editContractValue && editContractValue > 0) autoStatus = 'PAID';
+    else if (updatedPaid > 0) autoStatus = 'PARTIALLY_PAID';
+    else autoStatus = 'PENDING';
+
+    setEditInvoiceForm({
+      ...editInvoiceForm,
+      installments: updated,
+      status: autoStatus
+    });
+  };
+
+  // Helper for adding new installments in Create Invoice Modal
+  const handleAddNewInstallment = () => {
+    // If the previous installment had a partial payment entered, clamp its milestone value to what was paid
+    const currentInsts = newInvoiceForm.installments.map(inst => {
+      const copy = { ...inst };
+      if (copy.status === 'PARTIALLY_PAID' && copy.paidAmount !== undefined && copy.paidAmount > 0) {
+        copy.amount = copy.paidAmount;
+        copy.status = 'PAID';
+      }
+      return copy;
+    });
+
+    const totalCollected = currentInsts.reduce((sum, inst) => {
+      if (inst.status === 'PAID') return sum + (inst.paidAmount || inst.amount || 0);
+      return sum + (inst.paidAmount || 0);
+    }, 0);
+
+    const unallocated = Math.max(0, newContractValue - totalCollected);
+    const count = currentInsts.length + 1;
+    const ordinal = count === 2 ? '2nd' : count === 3 ? '3rd' : `${count}th`;
+    const newInst: InvoicePaymentInstallment = {
+      id: `inst-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
+      label: `${ordinal} Payment - Milestone Balance`,
+      amount: unallocated, // Automatically suggests exact remaining balance!
+      paidAmount: 0,
+      dueDate: newInvoiceForm.dueDate || new Date().toISOString().split('T')[0],
+      status: 'PENDING',
+      paymentMethod: 'UPI / Bank Transfer',
+      referenceId: ''
+    };
+    setNewInvoiceForm(prev => ({
+      ...prev,
+      installments: [...currentInsts, newInst]
+    }));
+    showNotification(`Added ${ordinal} installment with suggested balance of ${formatINR(unallocated)}`, 'info');
+  };
+
+  const handleRemoveNewInstallment = (idx: number) => {
+    if (newInvoiceForm.installments.length <= 1) return;
+    const updated = newInvoiceForm.installments.filter((_, i) => i !== idx);
+    setNewInvoiceForm({
+      ...newInvoiceForm,
+      installments: updated
+    });
   };
 
   const handleSaveInvoiceEdit = async (e: React.FormEvent) => {
@@ -639,7 +838,7 @@ Nearlook Agency • +91 98765 43208`;
     const phone = receipt.clientPhone || client?.whatsappNumber || '9876543210';
     const cleanPhone = phone.replace(/\D/g, '');
 
-    const contractTotal = receipt.totalContractValue || 0;
+    const contractTotal = receipt.totalContractValue || receipt.amount || 0;
     const paidToDate = receipt.totalPaidToDate || receipt.amount;
     const remainingBal = receipt.remainingBalanceDue ?? Math.max(0, contractTotal - paidToDate);
 
@@ -726,7 +925,7 @@ Nearlook Agency • +91 98765 43208`;
 
   // Copy receipt summary to clipboard
   const handleCopyReceiptText = (receipt: PaymentReceipt) => {
-    const contractTotal = receipt.totalContractValue || 0;
+    const contractTotal = receipt.totalContractValue || receipt.amount || 0;
     const paidToDate = receipt.totalPaidToDate || receipt.amount;
     const remainingBal = receipt.remainingBalanceDue ?? Math.max(0, contractTotal - paidToDate);
 
@@ -735,14 +934,20 @@ Nearlook Agency • +91 98765 43208`;
     showNotification('Receipt statement copied to clipboard!', 'info');
   };
 
-  // Aggregate Metrics
-  const totalProjectValue = projects.reduce((s, p) => s + (p.totalValue || 0), 0) +
-    invoices.filter(i => !i.projectId).reduce((s, i) => s + (i.totalAmount || 0), 0);
-
-  const totalPaidAmount = receipts.reduce((s, r) => s + (r.amount || 0), 0);
-
-  const totalBalanceDue = projects.reduce((s, p) => s + (p.balanceDue || 0), 0) +
-    invoices.filter(i => !i.projectId && i.status !== 'PAID' && i.status !== 'CLOSED').reduce((s, i) => s + (i.balanceDue !== undefined ? i.balanceDue : i.totalAmount), 0);
+  // Aggregate Metrics - Strictly derived from active client master invoices for 100% mathematical integrity
+  const totalContractValue = invoices.reduce((s, i) => s + (i.totalAmount || 0), 0);
+  const totalPaidAmount = invoices.reduce((s, i) => {
+    if (i.installments && i.installments.length > 0) {
+      const p = i.installments.reduce((sum, inst) => {
+        if (inst.status === 'PAID') return sum + Number(inst.paidAmount || inst.amount || 0);
+        if (inst.status === 'PARTIALLY_PAID') return sum + Number(inst.paidAmount || 0);
+        return sum;
+      }, 0);
+      return s + Math.min(p, i.totalAmount || 0);
+    }
+    return s + Math.min(i.paidAmount || 0, i.totalAmount || 0);
+  }, 0);
+  const totalBalanceDue = Math.max(0, totalContractValue - totalPaidAmount);
 
   // Expected Inflows This Month & Date Tracking (Simulated Today: 2026-11-20)
   const currentMonthStr = '2026-11';
@@ -885,14 +1090,27 @@ Nearlook Agency • +91 98765 43208`;
           <button
             onClick={() => {
               const defaultProj = projects[0];
-              if (defaultProj) {
-                setNewInvoiceForm({
-                  ...newInvoiceForm,
-                  clientId: defaultProj.clientId,
-                  projectId: defaultProj.id,
-                  subtotal: String(defaultProj.totalValue || 0)
-                });
-              }
+              const defVal = defaultProj ? (defaultProj.totalValue || (defaultProj as any).totalContractValue || 0) : 0;
+              setNewInvoiceForm({
+                ...newInvoiceForm,
+                clientId: defaultProj?.clientId || '',
+                projectId: defaultProj?.id || '',
+                subtotal: defVal > 0 ? String(defVal) : '',
+                initialPaymentAmount: '',
+                nextScheduledPaymentAmount: '',
+                installments: defVal > 0 ? [
+                  {
+                    id: `inst-1`,
+                    label: '1st Payment (Advance)',
+                    amount: defVal,
+                    paidAmount: 0,
+                    status: 'PENDING',
+                    dueDate: new Date().toISOString().split('T')[0],
+                    paymentMethod: 'UPI / Bank Transfer',
+                    referenceId: ''
+                  }
+                ] : []
+              });
               setShowInvoiceModal(true);
             }}
             className="px-4 py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md"
@@ -914,10 +1132,10 @@ Nearlook Agency • +91 98765 43208`;
             </div>
           </div>
           <div className="mt-2 text-2xl font-black text-slate-900">
-            {formatINR(totalProjectValue)}
+            {formatINR(totalContractValue)}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            Across {projects.length} signed project master contracts
+            Across {invoices.length} signed project master contracts
           </p>
         </div>
 
@@ -933,7 +1151,7 @@ Nearlook Agency • +91 98765 43208`;
             {formatINR(totalPaidAmount)}
           </div>
           <p className="text-[11px] text-slate-500 mt-1">
-            {receipts.length} split payment transactions credited
+            {invoices.reduce((cnt, i) => cnt + (i.installments?.filter(inst => inst.status === 'PAID').length || (i.paidAmount ? 1 : 0)), 0)} split payment transactions credited
           </p>
         </div>
 
@@ -1127,9 +1345,17 @@ Nearlook Agency • +91 98765 43208`;
                     </tr>
                   ) : (
                     filteredInvoices.map(inv => {
-                      const isSettled = inv.status === 'PAID' || inv.status === 'CLOSED';
-                      const balance = inv.balanceDue !== undefined ? inv.balanceDue : (isSettled ? 0 : inv.totalAmount);
-                      const paid = inv.paidAmount !== undefined ? inv.paidAmount : (isSettled ? inv.totalAmount : 0);
+                      // Dynamically compute verified paid sum strictly from installments, capped at totalAmount
+                      const computedPaidFromInst = inv.installments && inv.installments.length > 0
+                        ? inv.installments.reduce((sum, inst) => {
+                            if (inst.status === 'PAID') return sum + Number(inst.paidAmount || inst.amount || 0);
+                            if (inst.status === 'PARTIALLY_PAID') return sum + Number(inst.paidAmount || 0);
+                            return sum;
+                          }, 0)
+                        : (inv.paidAmount || 0);
+                      const paid = Math.min(computedPaidFromInst, inv.totalAmount);
+                      const balance = Math.max(0, inv.totalAmount - paid);
+                      const isSettled = balance === 0 && paid > 0;
 
                       // Due date computation relative to 2026-11-20
                       let dueBadge = { text: 'No Due Date', color: 'bg-slate-100 text-slate-600' };
@@ -1777,11 +2003,24 @@ Nearlook Agency • +91 98765 43208`;
                       const cId = e.target.value;
                       const cProjects = projects.filter(p => p.clientId === cId);
                       const targetProj = cProjects[0];
+                      const tVal = targetProj ? (targetProj.totalValue || (targetProj as any).totalContractValue || 0) : 0;
                       setNewInvoiceForm({
                         ...newInvoiceForm,
                         clientId: cId,
                         projectId: targetProj?.id || '',
-                        subtotal: targetProj ? String(targetProj.totalValue || 0) : newInvoiceForm.subtotal
+                        subtotal: tVal > 0 ? String(tVal) : '',
+                        installments: tVal > 0 ? [
+                          {
+                            id: `inst-1`,
+                            label: '1st Payment (Advance)',
+                            amount: tVal,
+                            paidAmount: 0,
+                            status: 'PENDING',
+                            dueDate: newInvoiceForm.dueDate || new Date().toISOString().split('T')[0],
+                            paymentMethod: 'UPI / Bank Transfer',
+                            referenceId: ''
+                          }
+                        ] : []
                       });
                     }}
                     className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1802,10 +2041,24 @@ Nearlook Agency • +91 98765 43208`;
                     onChange={e => {
                       const pId = e.target.value;
                       const proj = projects.find(p => p.id === pId);
+                      const pVal = proj ? (proj.totalValue || (proj as any).totalContractValue || 0) : 0;
                       setNewInvoiceForm({
                         ...newInvoiceForm,
                         projectId: pId,
-                        subtotal: proj ? String(proj.totalValue || 0) : newInvoiceForm.subtotal
+                        clientId: proj?.clientId || newInvoiceForm.clientId,
+                        subtotal: pVal > 0 ? String(pVal) : '',
+                        installments: pVal > 0 ? [
+                          {
+                            id: `inst-1`,
+                            label: '1st Payment (Advance)',
+                            amount: pVal,
+                            paidAmount: 0,
+                            status: 'PENDING',
+                            dueDate: newInvoiceForm.dueDate || new Date().toISOString().split('T')[0],
+                            paymentMethod: 'UPI / Bank Transfer',
+                            referenceId: ''
+                          }
+                        ] : []
                       });
                     }}
                     className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
@@ -1848,99 +2101,213 @@ Nearlook Agency • +91 98765 43208`;
                   </div>
                 </div>
 
-                {/* Split Installment Structure with Live Status Toggle */}
+                {/* Milestone Installments Structure with Balance Auto-Suggestions */}
                 <div className="space-y-3 pt-2 border-t border-slate-100">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-slate-800 text-xs">Milestone Payment Installments</span>
+                    <div>
+                      <span className="font-bold text-slate-800 text-xs block">Milestone Payment Installments</span>
+                      <span className="text-[10px] text-slate-400">
+                        Allocated: <strong className="font-mono text-slate-700">{formatINR(newTotalAllocated)}</strong> / {formatINR(newContractValue)} • 
+                        Remaining to Allocate: <strong className="font-mono text-amber-700">{formatINR(newUnallocatedBalance)}</strong>
+                      </span>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        const count = newInvoiceForm.installments.length + 1;
-                        setNewInvoiceForm({
-                          ...newInvoiceForm,
-                          installments: [
-                            ...newInvoiceForm.installments,
-                            {
-                              id: `inst-${Date.now()}`,
-                              label: `${count}th Payment - Milestone Deliverables`,
-                              amount: Math.min(50000, newLiveBalance),
-                              dueDate: '2026-12-25',
-                              paidAmount: 0,
-                              status: 'PENDING',
-                              paymentMethod: 'UPI / Bank Transfer'
-                            }
-                          ]
-                        });
-                      }}
-                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800"
+                      onClick={handleAddNewInstallment}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition"
                     >
-                      + Add Subsequent Installment
+                      + Add Subsequent Installment {newUnallocatedBalance > 0 ? `(Suggest: ${formatINR(newUnallocatedBalance)})` : ''}
                     </button>
                   </div>
 
-                  {newInvoiceForm.installments.map((inst, idx) => (
-                    <div key={inst.id || idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <input
-                          type="text"
-                          value={inst.label}
-                          onChange={e => {
-                            const updated = [...newInvoiceForm.installments];
-                            updated[idx].label = e.target.value;
-                            setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
-                          }}
-                          className="flex-1 font-bold text-xs bg-white border border-slate-200 rounded-lg px-2 py-1"
-                        />
-                        <select
-                          value={inst.status}
-                          onChange={e => {
-                            const updated = [...newInvoiceForm.installments];
-                            const s = e.target.value as any;
-                            updated[idx].status = s;
-                            if (s === 'PAID') {
-                              updated[idx].paidAmount = updated[idx].amount;
-                              updated[idx].paidDate = new Date().toISOString().split('T')[0];
-                            } else {
-                              updated[idx].paidAmount = 0;
-                            }
-                            setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
-                          }}
-                          className="text-[10px] font-bold bg-white border border-slate-200 rounded-lg px-2 py-1"
-                        >
-                          <option value="PENDING">PENDING</option>
-                          <option value="PAID">PAID</option>
-                        </select>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-slate-500 font-semibold block">Amount (₹)</label>
-                          <input
-                            type="number"
-                            value={inst.amount}
-                            onChange={e => {
-                              const updated = [...newInvoiceForm.installments];
-                              updated[idx].amount = Number(e.target.value);
-                              setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
-                            }}
-                            className="w-full font-mono font-bold text-xs bg-white border border-slate-200 rounded-lg px-2 py-1"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-500 font-semibold block">Due Date</label>
-                          <input
-                            type="date"
-                            value={inst.dueDate}
-                            onChange={e => {
-                              const updated = [...newInvoiceForm.installments];
-                              updated[idx].dueDate = e.target.value;
-                              setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
-                            }}
-                            className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1"
-                          />
-                        </div>
-                      </div>
+                  {newInvoiceForm.installments.length === 0 ? (
+                    <div className="p-4 bg-slate-50 border border-dashed border-slate-200 rounded-xl text-center space-y-2">
+                      <p className="text-xs text-slate-500 font-medium">No milestone installments configured yet.</p>
+                      <button
+                        type="button"
+                        onClick={handleAddNewInstallment}
+                        className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
+                      >
+                        + Add 1st Payment (Advance) {newContractValue > 0 ? `(Full: ${formatINR(newContractValue)})` : ''}
+                      </button>
                     </div>
-                  ))}
+                  ) : (
+                    newInvoiceForm.installments.map((inst, idx) => (
+                      <div key={inst.id || idx} className={`p-3 rounded-xl border space-y-2.5 transition-all ${inst.status === 'PAID' ? 'bg-emerald-50/50 border-emerald-200' : inst.status === 'PARTIALLY_PAID' ? 'bg-amber-50/50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <input
+                            type="text"
+                            value={inst.label}
+                            onChange={e => {
+                              const updated = [...newInvoiceForm.installments];
+                              updated[idx].label = e.target.value;
+                              setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
+                            }}
+                            className="flex-1 font-bold text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5"
+                            placeholder="e.g. 1st Payment - Advance"
+                          />
+                          <select
+                            value={inst.status}
+                            onChange={e => {
+                              const updated = [...newInvoiceForm.installments];
+                              const s = e.target.value as any;
+                              updated[idx].status = s;
+                              if (s === 'PAID') {
+                                updated[idx].paidAmount = updated[idx].amount;
+                                updated[idx].paidDate = new Date().toISOString().split('T')[0];
+                                if (!updated[idx].paymentMethod) updated[idx].paymentMethod = 'UPI / Bank Transfer';
+                              } else if (s === 'PARTIALLY_PAID') {
+                                if (!updated[idx].paidAmount || updated[idx].paidAmount === 0 || updated[idx].paidAmount === updated[idx].amount) {
+                                  updated[idx].paidAmount = Math.round(updated[idx].amount / 2);
+                                }
+                                updated[idx].paidDate = new Date().toISOString().split('T')[0];
+                                if (!updated[idx].paymentMethod) updated[idx].paymentMethod = 'UPI / Bank Transfer';
+                              } else if (s === 'PENDING') {
+                                updated[idx].paidAmount = 0;
+                              }
+                              setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
+                            }}
+                            className={`text-[10px] font-black rounded-lg px-2.5 py-1.5 cursor-pointer border ${
+                              inst.status === 'PAID' 
+                                ? 'bg-emerald-600 text-white border-emerald-700' 
+                                : inst.status === 'PARTIALLY_PAID'
+                                ? 'bg-amber-500 text-slate-950 border-amber-600'
+                                : 'bg-white text-slate-800 border-slate-300'
+                            }`}
+                          >
+                            <option value="PENDING">PENDING ⏳</option>
+                            <option value="PARTIALLY_PAID">PARTIALLY PAID ⏳</option>
+                            <option value="PAID">PAID ✓</option>
+                            <option value="OVERDUE">OVERDUE ⚠️</option>
+                          </select>
+                          {newInvoiceForm.installments.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveNewInstallment(idx)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                              title="Remove this installment"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Milestone Value (₹)</label>
+                            <input
+                              type="number"
+                              value={inst.amount}
+                              onChange={e => {
+                                const updated = [...newInvoiceForm.installments];
+                                const val = Number(e.target.value);
+                                updated[idx].amount = val;
+                                if (updated[idx].status === 'PAID') updated[idx].paidAmount = val;
+                                setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
+                              }}
+                              className="w-full font-mono font-bold text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-amber-700 font-bold block mb-0.5">Advance / Paid (₹)</label>
+                            <input
+                              type="number"
+                              value={inst.paidAmount !== undefined ? inst.paidAmount : ''}
+                              onChange={e => {
+                                const updated = [...newInvoiceForm.installments];
+                                const pVal = Number(e.target.value);
+                                updated[idx].paidAmount = pVal;
+                                if (pVal >= updated[idx].amount && updated[idx].amount > 0) {
+                                  updated[idx].status = 'PAID';
+                                } else if (pVal > 0) {
+                                  updated[idx].status = 'PARTIALLY_PAID';
+                                } else {
+                                  updated[idx].status = 'PENDING';
+                                }
+                                setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
+                              }}
+                              placeholder="0 (or advance)"
+                              className="w-full font-mono font-bold text-xs bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-amber-900 focus:ring-1 focus:ring-amber-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Payment Mode</label>
+                            <select
+                              value={inst.paymentMethod || 'UPI / Bank Transfer'}
+                              onChange={e => {
+                                const updated = [...newInvoiceForm.installments];
+                                updated[idx].paymentMethod = e.target.value;
+                                setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
+                              }}
+                              className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-medium"
+                            >
+                              <option value="UPI / Bank Transfer">UPI / GPay / PhonePe</option>
+                              <option value="NEFT / RTGS">NEFT / RTGS</option>
+                              <option value="Bank Cheque">Bank Cheque</option>
+                              <option value="Cash Receipt">Cash Receipt</option>
+                              <option value="Corporate Credit Card">Corporate Card</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">
+                              {inst.status === 'PAID' || inst.status === 'PARTIALLY_PAID' ? 'Paid Date' : 'Due Date'}
+                            </label>
+                            <input
+                              type="date"
+                              value={(inst.status === 'PAID' || inst.status === 'PARTIALLY_PAID') ? (inst.paidDate || inst.dueDate || '') : (inst.dueDate || '')}
+                              onChange={e => {
+                                const updated = [...newInvoiceForm.installments];
+                                if (inst.status === 'PAID' || inst.status === 'PARTIALLY_PAID') {
+                                  updated[idx].paidDate = e.target.value;
+                                } else {
+                                  updated[idx].dueDate = e.target.value;
+                                }
+                                setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
+                              }}
+                              className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Transaction Ref / UTR / Cheque Number */}
+                        <div className="pt-1.5 border-t border-slate-200/60">
+                          {inst.paymentMethod === 'Cash Receipt' ? (
+                            <div className="flex items-center gap-1.5 py-0.5 px-2 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded-md">
+                              <span>💵 Cash Receipt: Direct cash voucher (No bank UTR / digital reference required)</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] text-slate-500 font-bold shrink-0">
+                                {inst.paymentMethod === 'Bank Cheque' ? 'Cheque No:' :
+                                 inst.paymentMethod === 'Corporate Credit Card' ? 'Card Auth Ref:' :
+                                 inst.paymentMethod === 'NEFT / RTGS' ? 'NEFT / RTGS UTR:' :
+                                 'UPI Ref / UTR No:'}
+                              </label>
+                              <input
+                                type="text"
+                                value={inst.referenceId || ''}
+                                onChange={e => {
+                                  const updated = [...newInvoiceForm.installments];
+                                  updated[idx].referenceId = e.target.value;
+                                  setNewInvoiceForm({ ...newInvoiceForm, installments: updated });
+                                }}
+                                placeholder={
+                                  inst.paymentMethod === 'Bank Cheque' ? 'e.g. Cheque Number (CHQ-99214)' :
+                                  inst.paymentMethod === 'Corporate Credit Card' ? 'e.g. Card Auth / Transaction Ref' :
+                                  inst.paymentMethod === 'NEFT / RTGS' ? 'e.g. NEFT / RTGS UTR / Ref No.' :
+                                  'e.g. UPI Ref / UTR Number'
+                                }
+                                className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1 font-mono focus:ring-1 focus:ring-orange-500"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 {/* Requirement 2: Capped Next Scheduled Payment Input */}
@@ -2179,36 +2546,22 @@ Nearlook Agency • +91 98765 43208`;
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-bold text-slate-800 text-xs block">Milestone Installments Ledger</span>
-                      <span className="text-[10px] text-slate-400">Changing an installment status to Paid recalculates balance instantly.</span>
+                      <span className="text-[10px] text-slate-400">
+                        Allocated: <strong className="font-mono text-slate-700">{formatINR(editTotalAllocated)}</strong> / {formatINR(editContractValue)} • 
+                        Remaining to Allocate: <strong className="font-mono text-amber-700">{formatINR(editUnallocatedBalance)}</strong>
+                      </span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        const count = editInvoiceForm.installments.length + 1;
-                        setEditInvoiceForm({
-                          ...editInvoiceForm,
-                          installments: [
-                            ...editInvoiceForm.installments,
-                            {
-                              id: `inst-${Date.now()}`,
-                              label: `${count}th Payment Installment`,
-                              amount: Math.min(50000, editLiveBalance),
-                              dueDate: '2026-12-15',
-                              paidAmount: 0,
-                              status: 'PENDING',
-                              paymentMethod: 'UPI / Bank Transfer'
-                            }
-                          ]
-                        });
-                      }}
-                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800"
+                      onClick={handleAddEditInstallment}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition"
                     >
-                      + Add Subsequent Installment
+                      + Add Subsequent Installment {editUnallocatedBalance > 0 ? `(Suggest: ${formatINR(editUnallocatedBalance)})` : ''}
                     </button>
                   </div>
 
                   {editInvoiceForm.installments.map((inst, idx) => (
-                    <div key={inst.id || idx} className={`p-3 rounded-xl border space-y-2 transition-all ${inst.status === 'PAID' ? 'bg-emerald-50/50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <div key={inst.id || idx} className={`p-3 rounded-xl border space-y-2.5 transition-all ${inst.status === 'PAID' ? 'bg-emerald-50/50 border-emerald-200' : inst.status === 'PARTIALLY_PAID' ? 'bg-amber-50/50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
                       <div className="flex items-center justify-between gap-2">
                         <input
                           type="text"
@@ -2218,69 +2571,132 @@ Nearlook Agency • +91 98765 43208`;
                             updated[idx].label = e.target.value;
                             setEditInvoiceForm({ ...editInvoiceForm, installments: updated });
                           }}
-                          className="flex-1 font-bold text-xs bg-white border border-slate-200 rounded-lg px-2 py-1"
+                          className="flex-1 font-bold text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-amber-500"
                         />
-                        {/* Requirement 1: Instant status toggle */}
+                        {/* Requirement 1: Instant status toggle with PARTIALLY_PAID */}
                         <select
                           value={inst.status}
                           onChange={e => handleEditInstallmentStatusChange(idx, e.target.value as any)}
-                          className={`text-[10px] font-black rounded-lg px-2.5 py-1 cursor-pointer border ${inst.status === 'PAID' ? 'bg-emerald-600 text-white border-emerald-700' : 'bg-amber-100 text-amber-900 border-amber-300'}`}
+                          className={`text-[10px] font-black rounded-lg px-2.5 py-1.5 cursor-pointer border ${
+                            inst.status === 'PAID' 
+                              ? 'bg-emerald-600 text-white border-emerald-700' 
+                              : inst.status === 'PARTIALLY_PAID'
+                              ? 'bg-amber-500 text-slate-950 border-amber-600'
+                              : 'bg-white text-slate-800 border-slate-300'
+                          }`}
                         >
-                          <option value="PENDING">PENDING</option>
+                          <option value="PENDING">PENDING ⏳</option>
+                          <option value="PARTIALLY_PAID">PARTIALLY PAID ⏳</option>
                           <option value="PAID">PAID ✓</option>
-                          <option value="OVERDUE">OVERDUE</option>
+                          <option value="OVERDUE">OVERDUE ⚠️</option>
                         </select>
-                      </div>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div>
-                          <label className="text-[10px] text-slate-500 font-semibold block">Amount (₹)</label>
-                          <input
-                            type="number"
-                            value={inst.amount}
-                            onChange={e => {
-                              const updated = [...editInvoiceForm.installments];
-                              updated[idx].amount = Number(e.target.value);
-                              setEditInvoiceForm({ ...editInvoiceForm, installments: updated });
-                            }}
-                            className="w-full font-mono font-bold text-xs bg-white border border-slate-200 rounded-lg px-2 py-1"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-500 font-semibold block">Payment Mode</label>
-                          <select
-                            value={inst.paymentMethod || 'UPI / Bank Transfer'}
-                            onChange={e => {
-                              const updated = [...editInvoiceForm.installments];
-                              updated[idx].paymentMethod = e.target.value;
-                              setEditInvoiceForm({ ...editInvoiceForm, installments: updated });
-                            }}
-                            className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1 font-medium"
+                        {editInvoiceForm.installments.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveEditInstallment(idx)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                            title="Remove this installment"
                           >
-                            <option value="UPI / Bank Transfer">UPI / GPay / PhonePe</option>
-                            <option value="NEFT / RTGS">NEFT / RTGS</option>
-                            <option value="Bank Cheque">Bank Cheque</option>
-                            <option value="Cash Receipt">Cash Receipt</option>
-                            <option value="Corporate Credit Card">Corporate Card</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-500 font-semibold block">{inst.status === 'PAID' ? 'Paid Date' : 'Due Date'}</label>
-                          <input
-                            type="date"
-                            value={inst.status === 'PAID' ? (inst.paidDate || inst.dueDate) : inst.dueDate}
-                            onChange={e => {
-                              const updated = [...editInvoiceForm.installments];
-                              if (inst.status === 'PAID') {
-                                updated[idx].paidDate = e.target.value;
-                              } else {
-                                updated[idx].dueDate = e.target.value;
-                              }
-                              setEditInvoiceForm({ ...editInvoiceForm, installments: updated });
-                            }}
-                            className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1"
-                          />
-                        </div>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
+
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Milestone Value (₹)</label>
+                            <input
+                              type="number"
+                              value={inst.amount}
+                              onChange={e => handleEditInstallmentAmountChange(idx, Number(e.target.value))}
+                              className="w-full font-mono font-bold text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:ring-1 focus:ring-amber-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-amber-700 font-bold block mb-0.5">Advance / Paid (₹)</label>
+                            <input
+                              type="number"
+                              value={inst.paidAmount !== undefined ? inst.paidAmount : ''}
+                              onChange={e => handleEditInstallmentPaidAmountChange(idx, Number(e.target.value))}
+                              placeholder="0 (or advance)"
+                              className="w-full font-mono font-bold text-xs bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 text-amber-900 focus:ring-1 focus:ring-amber-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">Payment Mode</label>
+                            <select
+                              value={inst.paymentMethod || 'UPI / Bank Transfer'}
+                              onChange={e => {
+                                const updated = [...editInvoiceForm.installments];
+                                updated[idx].paymentMethod = e.target.value;
+                                setEditInvoiceForm({ ...editInvoiceForm, installments: updated });
+                              }}
+                              className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5 font-medium"
+                            >
+                              <option value="UPI / Bank Transfer">UPI / GPay / PhonePe</option>
+                              <option value="NEFT / RTGS">NEFT / RTGS</option>
+                              <option value="Bank Cheque">Bank Cheque</option>
+                              <option value="Cash Receipt">Cash Receipt</option>
+                              <option value="Corporate Credit Card">Corporate Card</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] text-slate-500 font-semibold block mb-0.5">
+                              {inst.status === 'PAID' || inst.status === 'PARTIALLY_PAID' ? 'Paid Date' : 'Due Date'}
+                            </label>
+                            <input
+                              type="date"
+                              value={(inst.status === 'PAID' || inst.status === 'PARTIALLY_PAID') ? (inst.paidDate || inst.dueDate || '') : (inst.dueDate || '')}
+                              onChange={e => {
+                                const updated = [...editInvoiceForm.installments];
+                                if (inst.status === 'PAID' || inst.status === 'PARTIALLY_PAID') {
+                                  updated[idx].paidDate = e.target.value;
+                                } else {
+                                  updated[idx].dueDate = e.target.value;
+                                }
+                                setEditInvoiceForm({ ...editInvoiceForm, installments: updated });
+                              }}
+                              className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2 py-1.5"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Transaction Ref / UTR / Cheque Number */}
+                        <div className="pt-1.5 border-t border-slate-200/60">
+                          {inst.paymentMethod === 'Cash Receipt' ? (
+                            <div className="flex items-center gap-1.5 py-0.5 px-2 bg-emerald-50 text-emerald-800 text-[10px] font-bold rounded-md">
+                              <span>💵 Cash Receipt: Direct cash voucher (No bank UTR / digital reference required)</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <label className="text-[10px] text-slate-500 font-bold shrink-0">
+                                {inst.paymentMethod === 'Bank Cheque' ? 'Cheque No:' :
+                                 inst.paymentMethod === 'Corporate Credit Card' ? 'Card Auth Ref:' :
+                                 inst.paymentMethod === 'NEFT / RTGS' ? 'NEFT / RTGS UTR:' :
+                                 'UPI Ref / UTR No:'}
+                              </label>
+                              <input
+                                type="text"
+                                value={inst.referenceId || ''}
+                                onChange={e => {
+                                  const updated = [...editInvoiceForm.installments];
+                                  updated[idx].referenceId = e.target.value;
+                                  setEditInvoiceForm({ ...editInvoiceForm, installments: updated });
+                                }}
+                                placeholder={
+                                  inst.paymentMethod === 'Bank Cheque' ? 'e.g. Cheque Number (CHQ-99214)' :
+                                  inst.paymentMethod === 'Corporate Credit Card' ? 'e.g. Card Auth / Transaction Ref' :
+                                  inst.paymentMethod === 'NEFT / RTGS' ? 'e.g. NEFT / RTGS UTR / Ref No.' :
+                                  'e.g. UPI Ref / UTR Number'
+                                }
+                                className="flex-1 text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1 font-mono focus:ring-1 focus:ring-amber-500"
+                              />
+                            </div>
+                          )}
+                        </div>
                     </div>
                   ))}
                 </div>
@@ -2809,21 +3225,21 @@ Accounts Desk: +91 98765 43208 • Nearlook Agency`}
                 <div className="flex justify-between items-center text-xs">
                   <span className="font-bold text-slate-700">Total Contract Value:</span>
                   <span className="font-mono font-bold text-slate-900">
-                    ₹{(activeReceiptModal.totalContractValue || 0).toLocaleString('en-IN')}
+                    ₹{(activeReceiptModal.totalContractValue || activeReceiptModal.amount || 0).toLocaleString('en-IN')}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs text-emerald-800">
                   <span>➖ Total Cumulative Paid to Date:</span>
                   <span className="font-mono font-bold">
-                    -₹{(activeReceiptModal.totalPaidToDate || activeReceiptModal.amount || 0).toLocaleString('en-IN')}
+                    -₹{(activeReceiptModal.totalPaidToDate || activeReceiptModal.amount).toLocaleString('en-IN')}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center text-xs pt-2 border-t border-blue-200">
                   <span className="font-black text-rose-700">Current Remaining Balance Due:</span>
                   <span className="font-mono font-black text-rose-700 text-base">
-                    ₹{(activeReceiptModal.remainingBalanceDue ?? Math.max(0, (activeReceiptModal.totalContractValue || 0) - (activeReceiptModal.totalPaidToDate || activeReceiptModal.amount || 0))).toLocaleString('en-IN')}
+                    ₹{(activeReceiptModal.remainingBalanceDue ?? Math.max(0, (activeReceiptModal.totalContractValue || activeReceiptModal.amount || 0) - (activeReceiptModal.totalPaidToDate || activeReceiptModal.amount))).toLocaleString('en-IN')}
                   </span>
                 </div>
 

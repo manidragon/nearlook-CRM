@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       fileName: fileName || `${title.replace(/\s+/g, '_')}.pdf`,
       fileSize: fileSize || '1.5 MB',
       uploadedByStaffId: uploadedByStaffId || 'staff-1',
-      uploadedByStaffName: uploadedByStaffName || 'Rachel Adams',
+      uploadedByStaffName: uploadedByStaffName || 'Arun',
       notes
     });
 

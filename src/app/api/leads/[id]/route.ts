@@ -51,7 +51,7 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   try {
     const { id } = params;
     const { searchParams } = new URL(req.url);
-    const deletedBy = searchParams.get('deletedBy') || 'Rachel Adams (ADMIN)';
+    const deletedBy = searchParams.get('deletedBy') || 'Arun (Owner)';
     const deleted = DataService.deleteLead(id, deletedBy);
     return NextResponse.json({
       success: deleted,

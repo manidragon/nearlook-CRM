@@ -27,6 +27,7 @@ export interface PersistentCRMStore {
   leaveApplicationsList?: any[];
   financialApprovalsList?: any[];
   clientDocumentsList?: any[];
+  influencersList?: any[];
 }
 
 const DEFAULT_DATA_DIR = path.join(process.cwd(), 'data');

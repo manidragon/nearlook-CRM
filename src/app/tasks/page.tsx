@@ -343,7 +343,7 @@ export default function TasksPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          staff: currentUser || { id: 'staff-1', name: 'Rachel Adams', role: 'ADMIN' },
+          staff: currentUser || { id: 'staff-1', name: 'Arun', role: 'OWNER' },
           completionNotes: 'Deliverable finalized, verified and ready for client delivery.'
         })
       });
@@ -1634,7 +1634,7 @@ export default function TasksPage() {
             {/* Owner notification log confirmation */}
             <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-xs text-emerald-800 font-semibold">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Owner Rachel Adams notified automatically via internal audit log.</span>
+              <span>Owner Arun notified automatically via internal audit log.</span>
             </div>
 
             {/* WhatsApp message preview */}

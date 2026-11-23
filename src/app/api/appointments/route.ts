@@ -93,7 +93,7 @@ export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    const deletedBy = searchParams.get('deletedBy') || 'Rachel Adams (ADMIN)';
+    const deletedBy = searchParams.get('deletedBy') || 'Arun (Owner)';
     if (!id) return NextResponse.json({ success: false, error: 'Appointment ID is required' }, { status: 400 });
 
     const deleted = DataService.deleteAppointment(id, deletedBy);

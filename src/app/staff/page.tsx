@@ -31,7 +31,9 @@ import {
   UserCog,
   Shield,
   CheckSquare2,
-  ExternalLink
+  ExternalLink,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import Link from 'next/link';
 import { StaffMember, Task, TimeLog, StaffRole, StaffTeam, AttendanceRecord, MonthlyWorkCalendar } from '@/lib/types';
@@ -39,7 +41,7 @@ import { getWhatsAppDirectUrl } from '@/lib/whatsappService';
 import { useAuth } from '@/lib/AuthContext';
 import { ALL_MODULE_KEYS, ALL_MODULE_KEY_STRINGS } from '@/lib/auth';
 
-const ROLE_COLORS: Record<StaffRole, string> = {
+const ROLE_COLORS: Record<string, string> = {
   ADMIN: 'bg-rose-50 text-rose-700 border-rose-200',
   OWNER: 'bg-rose-50 text-rose-700 border-rose-200',
   ACCOUNT_MANAGER: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -51,7 +53,7 @@ const ROLE_COLORS: Record<StaffRole, string> = {
   CONTENT_WRITER: 'bg-indigo-50 text-indigo-700 border-indigo-200',
 };
 
-const TEAM_LABELS: Record<StaffTeam, string> = {
+const TEAM_LABELS: Record<string, string> = {
   MANAGEMENT: 'Executive Management',
   ACCOUNTS: 'Accounts & Finance',
   WEB_DEVELOPMENT: 'Engineering & Tech',
@@ -60,6 +62,28 @@ const TEAM_LABELS: Record<StaffTeam, string> = {
   CONTENT: 'Content Strategy',
   FIELD_STAFF: 'On-Field Client Reps',
 };
+
+const DEFAULT_TEAMS = [
+  { key: 'WEB_DEVELOPMENT', label: 'Engineering & Tech' },
+  { key: 'MARKETING', label: 'Growth & Marketing' },
+  { key: 'DESIGN', label: 'UI/UX & Creative' },
+  { key: 'CONTENT', label: 'Content Strategy' },
+  { key: 'ACCOUNTS', label: 'Accounts & Finance' },
+  { key: 'FIELD_STAFF', label: 'On-Field Client Reps' },
+  { key: 'MANAGEMENT', label: 'Executive Management' },
+];
+
+const DEFAULT_ROLES = [
+  { key: 'DEVELOPER', label: 'Developer (Field Staff Isolation)' },
+  { key: 'FIELD_STAFF', label: 'Field Staff / Rep' },
+  { key: 'ACCOUNT_MANAGER', label: 'Account Manager (Financials Access)' },
+  { key: 'PROJECT_MANAGER', label: 'Project Manager' },
+  { key: 'MARKETER', label: 'Performance Marketer' },
+  { key: 'DESIGNER', label: 'UI/UX Designer' },
+  { key: 'CONTENT_WRITER', label: 'Content Writer' },
+  { key: 'ADMIN', label: 'System Admin' },
+  { key: 'OWNER', label: 'Agency Owner' },
+];
 
 export default function StaffPage() {
   const { currentUser, currentStaff, canViewFinancials, canManageStaff, isOwnerOrAdmin, canManageUsers, updateCurrentUser } = useAuth();
@@ -72,6 +96,9 @@ export default function StaffPage() {
 
   // Profile Modal State (Owner / Current User)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [viewingStaff, setViewingStaff] = useState<StaffMember | null>(null);
+  const [showViewStaffPassword, setShowViewStaffPassword] = useState(false);
+  const [copiedViewStaffPassword, setCopiedViewStaffPassword] = useState(false);
   const [profileForm, setProfileForm] = useState({
     name: '',
     email: '',
@@ -174,8 +201,12 @@ export default function StaffPage() {
   // Edit Staff State
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [isEditStaffModalOpen, setIsEditStaffModalOpen] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [copiedEditPassword, setCopiedEditPassword] = useState(false);
   const [editStaffForm, setEditStaffForm] = useState({
     name: '',
+    userId: '',
+    password: '',
     email: '',
     phone: '',
     address: '',
@@ -196,6 +227,115 @@ export default function StaffPage() {
     status: 'PRESENT' as 'PRESENT' | 'HALF_DAY' | 'ABSENT' | 'PRE_APPLIED_LEAVE',
     reason: ''
   });
+
+  // Dynamic Custom Teams & Roles State
+  const [customTeams, setCustomTeams] = useState<{ key: string; label: string }[]>([]);
+  const [customRoles, setCustomRoles] = useState<{ key: string; label: string; color?: string }[]>([]);
+  const [showAddTeamModal, setShowAddTeamModal] = useState(false);
+  const [showAddRoleModal, setShowAddRoleModal] = useState(false);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleColor, setNewRoleColor] = useState('bg-blue-100 text-blue-800 border-blue-200');
+  const [targetFormType, setTargetFormType] = useState<'create' | 'edit'>('create');
+
+  // Load custom teams and roles from localStorage
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const savedTeams = localStorage.getItem('nearlook_custom_teams');
+        if (savedTeams) {
+          const parsed = JSON.parse(savedTeams);
+          if (Array.isArray(parsed)) {
+            setCustomTeams(parsed);
+            parsed.forEach((t: { key: string; label: string }) => {
+              if (t.key && t.label) TEAM_LABELS[t.key] = t.label;
+            });
+          }
+        }
+        const savedRoles = localStorage.getItem('nearlook_custom_roles');
+        if (savedRoles) {
+          const parsed = JSON.parse(savedRoles);
+          if (Array.isArray(parsed)) {
+            setCustomRoles(parsed);
+            parsed.forEach((r: { key: string; label: string; color?: string }) => {
+              if (r.key && r.color) ROLE_COLORS[r.key] = r.color;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load custom teams and roles:', e);
+    }
+  }, []);
+
+  // Merge default + custom + any teams found on existing staff members
+  const allTeams = React.useMemo(() => {
+    const map = new Map<string, string>();
+    DEFAULT_TEAMS.forEach(t => map.set(t.key, t.label));
+    customTeams.forEach(t => map.set(t.key, t.label));
+    staff.forEach(s => {
+      if (s.team && !map.has(s.team)) {
+        map.set(s.team, TEAM_LABELS[s.team] || s.team.replace(/_/g, ' '));
+      }
+    });
+    return Array.from(map.entries()).map(([key, label]) => ({ key, label }));
+  }, [customTeams, staff]);
+
+  const allRoles = React.useMemo(() => {
+    const map = new Map<string, string>();
+    DEFAULT_ROLES.forEach(r => map.set(r.key, r.label));
+    customRoles.forEach(r => map.set(r.key, r.label));
+    staff.forEach(s => {
+      if (s.role && !map.has(s.role)) {
+        map.set(s.role, s.role.replace(/_/g, ' '));
+      }
+    });
+    return Array.from(map.entries()).map(([key, label]) => ({ key, label }));
+  }, [customRoles, staff]);
+
+  const handleAddNewTeam = () => {
+    const trimmed = newTeamName.trim();
+    if (!trimmed) return;
+    const key = trimmed.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '') || `TEAM_${Date.now()}`;
+    const newEntry = { key, label: trimmed };
+    TEAM_LABELS[key] = trimmed;
+
+    const updated = [...customTeams.filter(t => t.key !== key), newEntry];
+    setCustomTeams(updated);
+    try {
+      localStorage.setItem('nearlook_custom_teams', JSON.stringify(updated));
+    } catch (e) { }
+
+    if (targetFormType === 'create') {
+      setStaffForm(prev => ({ ...prev, team: key as StaffTeam }));
+    } else {
+      setEditStaffForm(prev => ({ ...prev, team: key as StaffTeam }));
+    }
+    setNewTeamName('');
+    setShowAddTeamModal(false);
+  };
+
+  const handleAddNewRole = () => {
+    const trimmed = newRoleName.trim();
+    if (!trimmed) return;
+    const key = trimmed.toUpperCase().replace(/\s+/g, '_').replace(/[^A-Z0-9_]/g, '') || `ROLE_${Date.now()}`;
+    const newEntry = { key, label: trimmed, color: newRoleColor };
+    ROLE_COLORS[key] = newRoleColor;
+
+    const updated = [...customRoles.filter(r => r.key !== key), newEntry];
+    setCustomRoles(updated);
+    try {
+      localStorage.setItem('nearlook_custom_roles', JSON.stringify(updated));
+    } catch (e) { }
+
+    if (targetFormType === 'create') {
+      setStaffForm(prev => ({ ...prev, role: key as StaffRole }));
+    } else {
+      setEditStaffForm(prev => ({ ...prev, role: key as StaffRole }));
+    }
+    setNewRoleName('');
+    setShowAddRoleModal(false);
+  };
 
   const loadData = async () => {
     try {
@@ -413,6 +553,8 @@ export default function StaffPage() {
     setEditingStaff(member);
     setEditStaffForm({
       name: member.name,
+      userId: member.userId || `STF-${Math.floor(100 + Math.random() * 900)}`,
+      password: member.password || `${member.name.split(' ')[0]}#Nearlook${Math.floor(1000 + Math.random() * 9000)}!`,
       email: member.email || '',
       phone: member.phone || '',
       address: member.address || '',
@@ -424,6 +566,8 @@ export default function StaffPage() {
       allowedModules: member.allowedModules || [...ALL_MODULE_KEY_STRINGS],
       canManageUsers: Boolean(member.canManageUsers)
     });
+    setShowEditPassword(false);
+    setCopiedEditPassword(false);
     setIsEditStaffModalOpen(true);
   };
 
@@ -437,6 +581,8 @@ export default function StaffPage() {
         body: JSON.stringify({
           id: editingStaff.id,
           ...editStaffForm,
+          userId: editStaffForm.userId,
+          password: editStaffForm.password,
           monthlySalary: Number(editStaffForm.monthlySalary) || 0,
           hourlyRate: Number(editStaffForm.hourlyRate) || 0,
           shiftTiming: editStaffForm.shiftTiming,
@@ -817,6 +963,13 @@ export default function StaffPage() {
                       </div>
 
                       <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setViewingStaff(member)}
+                          className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
+                          title="View Staff Profile & Credentials"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
                         {canManageStaff && (
                           <>
                             <button
@@ -1417,38 +1570,70 @@ export default function StaffPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-bold text-slate-700">Assigned Team / Dept</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700">Assigned Team / Dept</label>
+                      <button
+                        type="button"
+                        onClick={() => { setTargetFormType('create'); setShowAddTeamModal(true); }}
+                        className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 hover:underline cursor-pointer"
+                        title="Add a new custom team / department"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add Team</span>
+                      </button>
+                    </div>
                     <select
                       value={staffForm.team}
-                      onChange={(e) => setStaffForm({ ...staffForm, team: e.target.value as StaffTeam })}
+                      onChange={(e) => {
+                        if (e.target.value === '__NEW_TEAM__') {
+                          setTargetFormType('create');
+                          setShowAddTeamModal(true);
+                        } else {
+                          setStaffForm({ ...staffForm, team: e.target.value as StaffTeam });
+                        }
+                      }}
                       className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
                     >
-                      <option value="WEB_DEVELOPMENT">Engineering & Tech</option>
-                      <option value="MARKETING">Growth & Marketing</option>
-                      <option value="DESIGN">UI/UX & Creative</option>
-                      <option value="CONTENT">Content Strategy</option>
-                      <option value="ACCOUNTS">Accounts & Finance</option>
-                      <option value="FIELD_STAFF">On-Field Client Reps</option>
-                      <option value="MANAGEMENT">Executive Management</option>
+                      {allTeams.map((t) => (
+                        <option key={t.key} value={t.key}>{t.label}</option>
+                      ))}
+                      <option value="__NEW_TEAM__" className="text-orange-600 font-bold bg-orange-50">
+                        ➕ + Add New Custom Team...
+                      </option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-700">System Role (RBAC)</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700">System Role (RBAC)</label>
+                      <button
+                        type="button"
+                        onClick={() => { setTargetFormType('create'); setShowAddRoleModal(true); }}
+                        className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 hover:underline cursor-pointer"
+                        title="Add a new custom system role"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add Role</span>
+                      </button>
+                    </div>
                     <select
                       value={staffForm.role}
-                      onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value as StaffRole })}
+                      onChange={(e) => {
+                        if (e.target.value === '__NEW_ROLE__') {
+                          setTargetFormType('create');
+                          setShowAddRoleModal(true);
+                        } else {
+                          setStaffForm({ ...staffForm, role: e.target.value as StaffRole });
+                        }
+                      }}
                       className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
                     >
-                      <option value="DEVELOPER">Developer (Field Staff Isolation)</option>
-                      <option value="FIELD_STAFF">Field Staff / Rep</option>
-                      <option value="ACCOUNT_MANAGER">Account Manager (Financials Access)</option>
-                      <option value="PROJECT_MANAGER">Project Manager</option>
-                      <option value="MARKETER">Performance Marketer</option>
-                      <option value="DESIGNER">UI/UX Designer</option>
-                      <option value="CONTENT_WRITER">Content Writer</option>
-                      <option value="ADMIN">System Admin</option>
-                      <option value="OWNER">Agency Owner</option>
+                      {allRoles.map((r) => (
+                        <option key={r.key} value={r.key}>{r.label}</option>
+                      ))}
+                      <option value="__NEW_ROLE__" className="text-orange-600 font-bold bg-orange-50">
+                        ➕ + Add New Custom Role...
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -1654,6 +1839,93 @@ export default function StaffPage() {
 
             <form onSubmit={handleUpdateStaff} className="flex flex-col flex-1 min-h-0 overflow-hidden">
               <div className="overflow-y-auto flex-1 p-6 space-y-4">
+                {/* Login ID and Password Credentials Setup */}
+                <div className="p-3.5 bg-gradient-to-br from-amber-50/90 to-orange-50/70 rounded-xl border border-amber-200/90 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-orange-600 text-white flex items-center justify-center shrink-0">
+                        <Key className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="font-black text-xs text-slate-900 block">Portal Login ID & Password Setup</span>
+                        <span className="text-[10px] text-slate-500">Credentials for staff member to sign in to Nearlook Agency ERP</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Login User ID *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={editStaffForm.userId}
+                        onChange={(e) => setEditStaffForm({ ...editStaffForm, userId: e.target.value })}
+                        placeholder="e.g. STF-101"
+                        className="w-full bg-white border border-amber-300 font-mono font-bold text-xs text-slate-900 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                      <span className="text-[9px] text-slate-400 mt-0.5 block">Unique identification ID for sign-in</span>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-700">
+                          Login Password *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const firstName = editStaffForm.name.trim().split(' ')[0] || 'Staff';
+                            const randomDigits = Math.floor(1000 + Math.random() * 9000);
+                            const newPass = `${firstName}#Nearlook${randomDigits}!`;
+                            setEditStaffForm({ ...editStaffForm, password: newPass });
+                            setShowEditPassword(true);
+                          }}
+                          className="text-[10px] text-orange-600 hover:text-orange-800 font-bold flex items-center gap-1"
+                          title="Generate a secure random password"
+                        >
+                          <RotateCcw className="w-2.5 h-2.5" /> Generate
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showEditPassword ? 'text' : 'password'}
+                          required
+                          value={editStaffForm.password}
+                          onChange={(e) => setEditStaffForm({ ...editStaffForm, password: e.target.value })}
+                          placeholder="e.g. Nearlook#2026!"
+                          className="w-full bg-white border border-amber-300 font-mono text-xs text-slate-900 rounded-lg pl-3 pr-16 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowEditPassword(!showEditPassword)}
+                            className="p-1 text-slate-400 hover:text-slate-700 rounded"
+                            title={showEditPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showEditPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(editStaffForm.password);
+                              setCopiedEditPassword(true);
+                              setTimeout(() => setCopiedEditPassword(false), 2000);
+                            }}
+                            className="p-1 text-slate-400 hover:text-orange-600 rounded"
+                            title="Copy password"
+                          >
+                            {copiedEditPassword ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                      <span className="text-[9px] text-slate-400 mt-0.5 block">Owner & staff auth key</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-bold text-slate-700">Full Name *</label>
@@ -1702,28 +1974,70 @@ export default function StaffPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-bold text-slate-700">Department Team</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700">Department Team</label>
+                      <button
+                        type="button"
+                        onClick={() => { setTargetFormType('edit'); setShowAddTeamModal(true); }}
+                        className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 hover:underline cursor-pointer"
+                        title="Add a new custom team"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add Team</span>
+                      </button>
+                    </div>
                     <select
                       value={editStaffForm.team}
-                      onChange={(e) => setEditStaffForm({ ...editStaffForm, team: e.target.value as StaffTeam })}
+                      onChange={(e) => {
+                        if (e.target.value === '__NEW_TEAM__') {
+                          setTargetFormType('edit');
+                          setShowAddTeamModal(true);
+                        } else {
+                          setEditStaffForm({ ...editStaffForm, team: e.target.value as StaffTeam });
+                        }
+                      }}
                       className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
                     >
-                      {Object.entries(TEAM_LABELS).map(([k, label]) => (
-                        <option key={k} value={k}>{label}</option>
+                      {allTeams.map((t) => (
+                        <option key={t.key} value={t.key}>{t.label}</option>
                       ))}
+                      <option value="__NEW_TEAM__" className="text-orange-600 font-bold bg-orange-50">
+                        ➕ + Add New Custom Team...
+                      </option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-slate-700">Role Classification</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-700">Role Classification</label>
+                      <button
+                        type="button"
+                        onClick={() => { setTargetFormType('edit'); setShowAddRoleModal(true); }}
+                        className="text-[11px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 hover:underline cursor-pointer"
+                        title="Add a new custom role"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add Role</span>
+                      </button>
+                    </div>
                     <select
                       value={editStaffForm.role}
-                      onChange={(e) => setEditStaffForm({ ...editStaffForm, role: e.target.value as StaffRole })}
+                      onChange={(e) => {
+                        if (e.target.value === '__NEW_ROLE__') {
+                          setTargetFormType('edit');
+                          setShowAddRoleModal(true);
+                        } else {
+                          setEditStaffForm({ ...editStaffForm, role: e.target.value as StaffRole });
+                        }
+                      }}
                       className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
                     >
-                      {Object.keys(ROLE_COLORS).map(role => (
-                        <option key={role} value={role}>{role.replace('_', ' ')}</option>
+                      {allRoles.map((r) => (
+                        <option key={r.key} value={r.key}>{r.label}</option>
                       ))}
+                      <option value="__NEW_ROLE__" className="text-orange-600 font-bold bg-orange-50">
+                        ➕ + Add New Custom Role...
+                      </option>
                     </select>
                   </div>
                 </div>
@@ -2138,19 +2452,19 @@ export default function StaffPage() {
                     <div className="p-3 text-xs space-y-2">
                       <div className="flex justify-between text-slate-600">
                         <span>Basic Salary (50%)</span>
-                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 0) * 0.5).toLocaleString('en-IN')}</span>
+                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 45000) * 0.5).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>House Rent Allowance (HRA 30%)</span>
-                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 0) * 0.3).toLocaleString('en-IN')}</span>
+                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 45000) * 0.3).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>Special Allowance & Tech Perks (20%)</span>
-                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 0) * 0.2).toLocaleString('en-IN')}</span>
+                        <span className="font-mono font-semibold">₹{Math.round((selectedSlipStaff.staff.monthlySalary || 45000) * 0.2).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="pt-2 border-t border-slate-100 flex justify-between font-bold text-slate-900">
                         <span>Total Gross Earnings</span>
-                        <span className="font-mono text-emerald-700">₹{(selectedSlipStaff.staff.monthlySalary || 0).toLocaleString('en-IN')}</span>
+                        <span className="font-mono text-emerald-700">₹{(selectedSlipStaff.staff.monthlySalary || 45000).toLocaleString('en-IN')}</span>
                       </div>
                     </div>
                   </div>
@@ -2165,13 +2479,13 @@ export default function StaffPage() {
                       <div className="flex justify-between text-slate-600">
                         <span>Unapproved Absences ({selectedSlipStaff.absentDays} days)</span>
                         <span className="font-mono font-semibold text-rose-600">
-                          -₹{Math.round(selectedSlipStaff.absentDays * ((selectedSlipStaff.staff.monthlySalary || 0) / 30)).toLocaleString('en-IN')}
+                          -₹{Math.round(selectedSlipStaff.absentDays * ((selectedSlipStaff.staff.monthlySalary || 45000) / 30)).toLocaleString('en-IN')}
                         </span>
                       </div>
                       <div className="flex justify-between text-slate-600">
                         <span>Half-Days / Late Clock-ins ({selectedSlipStaff.halfDays})</span>
                         <span className="font-mono font-semibold text-rose-600">
-                          -₹{Math.round(selectedSlipStaff.halfDays * ((selectedSlipStaff.staff.monthlySalary || 0) / 60)).toLocaleString('en-IN')}
+                          -₹{Math.round(selectedSlipStaff.halfDays * ((selectedSlipStaff.staff.monthlySalary || 45000) / 60)).toLocaleString('en-IN')}
                         </span>
                       </div>
                       <div className="flex justify-between text-slate-600">
@@ -2247,6 +2561,372 @@ export default function StaffPage() {
                   Print / Save PDF
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Create New Team Modal */}
+      {showAddTeamModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 text-slate-900">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-orange-600" />
+                Create New Department / Team
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setShowAddTeamModal(false); setNewTeamName(''); }}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="py-4 space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Team / Department Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Mobile Apps & Flutter / DevOps / QA"
+                  value={newTeamName}
+                  onChange={(e) => setNewTeamName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddNewTeam();
+                    }
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
+                  autoFocus
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                This new department will appear in all staff selectors and department matrices.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => { setShowAddTeamModal(false); setNewTeamName(''); }}
+                className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNewTeam}
+                disabled={!newTeamName.trim()}
+                className="px-4 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-500/20"
+              >
+                Save & Select Team
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create New Role Modal */}
+      {showAddRoleModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 text-slate-900">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-orange-600" />
+                Create New System Role
+              </h3>
+              <button
+                type="button"
+                onClick={() => { setShowAddRoleModal(false); setNewRoleName(''); }}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="py-4 space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Role Title / Designation *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Flutter Engineer / QA Lead / SEO Specialist"
+                  value={newRoleName}
+                  onChange={(e) => setNewRoleName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddNewRole();
+                    }
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">Role Badge Color</label>
+                <div className="flex items-center gap-2">
+                  {[
+                    { id: 'blue', label: 'Blue', cls: 'bg-blue-100 text-blue-800 border-blue-200' },
+                    { id: 'purple', label: 'Purple', cls: 'bg-purple-100 text-purple-800 border-purple-200' },
+                    { id: 'emerald', label: 'Green', cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+                    { id: 'amber', label: 'Amber', cls: 'bg-amber-100 text-amber-800 border-amber-200' },
+                    { id: 'rose', label: 'Rose', cls: 'bg-rose-100 text-rose-800 border-rose-200' },
+                  ].map(col => (
+                    <button
+                      key={col.id}
+                      type="button"
+                      onClick={() => setNewRoleColor(col.cls)}
+                      className={`px-2 py-1 rounded-lg border text-[10px] font-bold transition-all ${col.cls} ${newRoleColor === col.cls ? 'ring-2 ring-orange-500 shadow-xs' : 'opacity-70 hover:opacity-100'}`}
+                    >
+                      {col.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                You can customize this role's granular module permissions in the section below.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => { setShowAddRoleModal(false); setNewRoleName(''); }}
+                className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddNewRole}
+                disabled={!newRoleName.trim()}
+                className="px-4 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-500/20"
+              >
+                Save & Select Role
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* View Staff Member Details Modal */}
+      {viewingStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-slate-900">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0 bg-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-black text-sm border border-orange-200 shadow-xs">
+                  {viewingStaff.name ? viewingStaff.name.slice(0, 2).toUpperCase() : 'ST'}
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-slate-900 flex items-center gap-2">
+                    <span>{viewingStaff.name}</span>
+                    <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded border border-slate-200">
+                      {viewingStaff.userId}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500">Staff Profile, Payroll Parameters & Directory Record</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingStaff(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Body */}
+            <div className="overflow-y-auto flex-1 p-6 space-y-4 text-xs">
+              {/* Login Credentials Card */}
+              <div className="p-4 bg-gradient-to-br from-amber-50 to-orange-50/70 rounded-xl border border-amber-200 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Key className="w-4 h-4 text-orange-600" />
+                    <span className="font-black text-slate-900 text-xs">Portal Login Credentials (RBAC)</span>
+                  </div>
+                  <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-2 py-0.5 rounded-full border border-orange-200">
+                    Active Auth Key
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-amber-200/60">
+                  <div className="bg-white p-2.5 rounded-lg border border-amber-200">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Login User ID</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono font-bold text-slate-900 text-xs">{viewingStaff.userId || 'N/A'}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (viewingStaff.userId) navigator.clipboard.writeText(viewingStaff.userId);
+                        }}
+                        className="text-slate-400 hover:text-orange-600 p-0.5"
+                        title="Copy User ID"
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-amber-200">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block">Login Password</span>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="font-mono text-xs text-slate-900">
+                        {showViewStaffPassword ? (viewingStaff.password || 'Nearlook#2026!') : '••••••••••••'}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowViewStaffPassword(!showViewStaffPassword)}
+                          className="text-slate-400 hover:text-slate-700 p-0.5"
+                          title={showViewStaffPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showViewStaffPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(viewingStaff.password || 'Nearlook#2026!');
+                            setCopiedViewStaffPassword(true);
+                            setTimeout(() => setCopiedViewStaffPassword(false), 2000);
+                          }}
+                          className="text-slate-400 hover:text-orange-600 p-0.5"
+                          title="Copy Password"
+                        >
+                          {copiedViewStaffPassword ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Role & Status Card */}
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Role & Department</span>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className="text-xs font-bold px-2 py-0.5 rounded border bg-amber-50 text-amber-800 border-amber-200">
+                      {viewingStaff.role ? viewingStaff.role.replace(/_/g, ' ') : 'STAFF'}
+                    </span>
+                    <span className="text-xs font-bold text-slate-600">
+                      • {TEAM_LABELS[viewingStaff.team] || viewingStaff.team}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Status</span>
+                  <span className="inline-block mt-1 text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    {viewingStaff.status || 'ACTIVE'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="p-4 bg-white rounded-xl border border-slate-200 space-y-2.5">
+                <h4 className="font-bold text-slate-800 text-xs flex items-center gap-1.5 border-b border-slate-100 pb-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-orange-600" />
+                  Contact Information
+                </h4>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Email Address</span>
+                    <a href={`mailto:${viewingStaff.email}`} className="text-slate-800 hover:text-orange-600 font-semibold truncate block mt-0.5">
+                      {viewingStaff.email || 'N/A'}
+                    </a>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">WhatsApp Phone</span>
+                    <a 
+                      href={`https://wa.me/${(viewingStaff.phone || '').replace(/[^0-9]/g, '')}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="text-emerald-700 hover:text-emerald-800 font-bold block mt-0.5"
+                    >
+                      {viewingStaff.phone || 'N/A'} ↗
+                    </a>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Office Shift Slot</span>
+                    <span className="text-slate-700 font-medium block mt-0.5">
+                      {viewingStaff.shiftTiming || '09:30 AM - 07:30 PM (Standard Shift)'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">City / Location</span>
+                    <span className="text-slate-700 font-medium block mt-0.5 truncate">
+                      {viewingStaff.address || 'Bangalore, Karnataka'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Compensation Breakdown */}
+              <div className="p-4 bg-orange-50/60 rounded-xl border border-orange-200/80 space-y-2.5">
+                <h4 className="font-bold text-orange-950 text-xs flex items-center gap-1.5 border-b border-orange-200/60 pb-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-orange-600" />
+                  Compensation & Payout Terms
+                </h4>
+                <div className="grid grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Monthly Base</span>
+                    <span className="text-base font-black text-slate-900 font-mono block mt-0.5">
+                      ₹{(viewingStaff.monthlySalary || 0).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Daily Prorated</span>
+                    <span className="text-sm font-bold text-slate-800 font-mono block mt-0.5">
+                      ₹{Math.round((viewingStaff.monthlySalary || 0) / 30).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold">Hourly Rate</span>
+                    <span className="text-sm font-bold text-slate-800 font-mono block mt-0.5">
+                      {viewingStaff.hourlyRate ? `₹${viewingStaff.hourlyRate.toLocaleString('en-IN')}` : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sub-Admin Permissions & Access */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-orange-600" />
+                  <div>
+                    <span className="font-bold text-slate-800 block">Sub-Admin Permission</span>
+                    <span className="text-[11px] text-slate-500">
+                      {viewingStaff.canManageUsers ? 'Authorized to onboard & manage other staff' : 'Standard staff privileges only'}
+                    </span>
+                  </div>
+                </div>
+                <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
+                  viewingStaff.canManageUsers ? 'bg-orange-100 text-orange-800 border-orange-300' : 'bg-slate-100 text-slate-600 border-slate-300'
+                }`}>
+                  {viewingStaff.canManageUsers ? 'Sub-Admin' : 'Standard'}
+                </span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewingStaff(null)}
+                className="px-4 py-2 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100 transition"
+              >
+                Close
+              </button>
+              {canManageStaff && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = viewingStaff;
+                    setViewingStaff(null);
+                    openEditStaff(target);
+                  }}
+                  className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs rounded-xl transition shadow-md shadow-orange-600/20"
+                >
+                  Edit Staff Details
+                </button>
+              )}
             </div>
           </div>
         </div>

@@ -38,3 +38,7 @@ yarn-error.log*
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Archives & nested copies
+*.zip
+IT CRM/
