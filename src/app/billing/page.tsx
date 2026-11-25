@@ -274,10 +274,13 @@ export default function ClientBillingPage() {
 
   // Open Split Payment Modal pre-filled
   const handleOpenSplitModal = (item: { clientId: string; projectId?: string; invoiceId?: string; balance?: number }) => {
+    const linkedInv = item.invoiceId
+      ? invoices.find(i => i.id === item.invoiceId)
+      : (item.projectId ? invoices.find(i => i.projectId === item.projectId) : undefined);
     setSplitForm({
       clientId: item.clientId || (clients[0]?.id || ''),
-      projectId: item.projectId || '',
-      invoiceId: item.invoiceId || '',
+      projectId: item.projectId || linkedInv?.projectId || '',
+      invoiceId: item.invoiceId || linkedInv?.id || '',
       amount: item.balance ? String(item.balance) : '',
       milestoneLabel: 'Split Installment',
       paymentMethod: 'UPI / Bank Transfer',
@@ -1817,10 +1820,14 @@ Nearlook Agency • +91 98765 43208`;
                     onChange={e => {
                       const cId = e.target.value;
                       const cProjects = projects.filter(p => p.clientId === cId);
+                      const firstProj = cProjects[0];
+                      const linkedInv = firstProj ? invoices.find(i => i.projectId === firstProj.id) : undefined;
                       setSplitForm({
                         ...splitForm,
                         clientId: cId,
-                        projectId: cProjects[0]?.id || ''
+                        projectId: firstProj?.id || '',
+                        invoiceId: linkedInv?.id || '',
+                        amount: firstProj?.balanceDue ? String(firstProj.balanceDue) : splitForm.amount
                       });
                     }}
                     className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -1837,7 +1844,17 @@ Nearlook Agency • +91 98765 43208`;
                   <select
                     required
                     value={splitForm.projectId}
-                    onChange={e => setSplitForm({ ...splitForm, projectId: e.target.value })}
+                    onChange={e => {
+                      const pId = e.target.value;
+                      const proj = projects.find(p => p.id === pId);
+                      const linkedInv = invoices.find(i => i.projectId === pId);
+                      setSplitForm({
+                        ...splitForm,
+                        projectId: pId,
+                        invoiceId: linkedInv?.id || '',
+                        amount: proj?.balanceDue ? String(proj.balanceDue) : splitForm.amount
+                      });
+                    }}
                     className="w-full text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl p-2.5 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="">-- Choose Project for Credit --</option>

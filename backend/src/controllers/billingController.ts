@@ -19,7 +19,7 @@ export const getBillingOverview = async (req: Request, res: Response) => {
       orderBy: { businessName: 'asc' }
     });
 
-    const duesSummary = projects.map(p => {
+    const duesSummary = projects.map((p: any) => {
       let lateFee = 0;
       if (p.lateFeeAssigned && p.dueDate && p.balanceDue > 0) {
         const dueTime = new Date(p.dueDate).getTime();
@@ -109,10 +109,34 @@ export const recordSplitPayment = async (req: Request, res: Response) => {
         paymentMethod: paymentMethod || 'UPI / Bank Transfer',
         recordedByStaffId: recordedByStaffId || null,
         recordedByStaffName: recordedByStaffName || null,
-        autoInvoiceGenerated: true,
+        autoInvoiceGenerated: false,
         invoiceId: invoiceId || null
       }
     });
+
+    // Update invoice balance and status if linked
+    if (invoiceId || projectId) {
+      try {
+        const inv = invoiceId
+          ? await prisma.invoice.findUnique({ where: { id: invoiceId } })
+          : await prisma.invoice.findFirst({ where: { projectId } });
+        if (inv) {
+          const invPaid = (inv.paidAmount || 0) + numAmount;
+          const invBal = Math.max(0, inv.totalAmount - invPaid);
+          await prisma.invoice.update({
+            where: { id: inv.id },
+            data: {
+              paidAmount: invPaid,
+              balanceDue: invBal,
+              status: invBal === 0 ? 'PAID' : 'PARTIALLY_PAID',
+              paidDate: invBal === 0 ? new Date().toISOString().split('T')[0] : inv.paidDate
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Could not update invoice in prisma:', e);
+      }
+    }
 
     // Update project balances
     await prisma.project.update({

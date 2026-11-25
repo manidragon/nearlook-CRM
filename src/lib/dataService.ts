@@ -1258,12 +1258,13 @@ const rawDataService = {
       }
 
       const totalVal = proj.totalValue || 0;
+      const baseBudget = Math.round(totalVal / 1.18);
       const internalGst = proj.gstAmount !== undefined && proj.gstAmount > 0
         ? proj.gstAmount
-        : Math.round((totalVal * 18) / 118);
+        : (totalVal - baseBudget);
       const netBudget = proj.budget !== undefined && proj.budget > 0 && proj.budget < totalVal
         ? proj.budget
-        : Math.max(0, totalVal - internalGst);
+        : baseBudget;
 
       return {
         ...proj,
@@ -1313,8 +1314,8 @@ const rawDataService = {
     const totalVal = Number(data.totalValue) || 0;
     const advance = Number(data.advanceRequired) || Math.round(totalVal * 0.4);
     const domainPrefix = (data.domain || 'IT').substring(0, 3).toUpperCase();
-    const computedGst = data.gstAmount !== undefined && Number(data.gstAmount) > 0 ? Number(data.gstAmount) : Math.round((totalVal * 18) / 118);
-    const computedBudget = data.budget !== undefined && Number(data.budget) > 0 ? Number(data.budget) : Math.max(0, totalVal - computedGst);
+    const computedBudget = data.budget !== undefined && Number(data.budget) > 0 ? Number(data.budget) : Math.round(totalVal / 1.18);
+    const computedGst = data.gstAmount !== undefined && Number(data.gstAmount) > 0 ? Number(data.gstAmount) : (totalVal - computedBudget);
     const newProj: Project = {
       id: `proj-${Date.now()}`,
       code: `PRJ-${domainPrefix}-${String(projectsList.length + 101).padStart(3, '0')}`,
@@ -1381,6 +1382,23 @@ const rawDataService = {
       deletedBy
     );
     projectsList.splice(idx, 1);
+
+    // Cascade delete linked invoices and receipts to recycle bin
+    const linkedInvoices = invoicesList.filter(inv => inv.projectId === id);
+    linkedInvoices.forEach(inv => {
+      moveToRecycleBin(inv.id, 'INVOICE', inv.invoiceNumber, `${inv.clientName} • ₹${(inv.totalAmount || 0).toLocaleString('en-IN')}`, inv, deletedBy);
+      const invIdx = invoicesList.findIndex(i => i.id === inv.id);
+      if (invIdx !== -1) invoicesList.splice(invIdx, 1);
+    });
+
+    const linkedReceipts = receiptsList.filter(rcp => rcp.projectId === id);
+    linkedReceipts.forEach(rcp => {
+      moveToRecycleBin(rcp.id, 'RECEIPT', rcp.receiptNumber, `${rcp.clientName} • ₹${(rcp.amount || 0).toLocaleString('en-IN')}`, rcp, deletedBy);
+      const rcpIdx = receiptsList.findIndex(r => r.id === rcp.id);
+      if (rcpIdx !== -1) receiptsList.splice(rcpIdx, 1);
+    });
+
+    persistStore();
     return true;
   },
 
@@ -2309,19 +2327,31 @@ const rawDataService = {
 
     // Project contract value rule: do NOT tack on extra +18% on top of agreed contract value!
     const contractTotal = proj ? proj.totalValue : Number(data.subtotal || 0);
-    const subtotal = contractTotal;
-    const totalAmount = contractTotal;
-    const taxAmount = 0;
+    const gstType: GSTType = data.gstType || (proj && proj.gstAmount && proj.gstAmount > 0 ? 'INCLUSIVE_18' : 'NO_GST');
 
-    const gstType: GSTType = proj && proj.gstAmount && proj.gstAmount > 0
-      ? 'ADDITIONAL_18'
-      : (data.gstType || 'NO_GST');
-
+    let subtotal = 0;
+    let taxAmount = 0;
+    let totalAmount = 0;
     let internalTaxCalculated = 0;
+
     if (gstType === 'INCLUSIVE_18') {
-      internalTaxCalculated = Math.round((totalAmount * 18) / 118);
+      // Reverse GST extraction formula: Base = Total / 1.18, GST = Total - Base
+      totalAmount = contractTotal;
+      subtotal = Math.round(totalAmount / 1.18);
+      taxAmount = totalAmount - subtotal;
+      internalTaxCalculated = taxAmount;
+    } else if (gstType === 'ADDITIONAL_18') {
+      // 18% applied directly on base amount (GST-Exclusive)
+      subtotal = contractTotal;
+      taxAmount = Math.round(subtotal * 0.18);
+      totalAmount = subtotal + taxAmount;
+      internalTaxCalculated = taxAmount;
     } else {
-      internalTaxCalculated = Math.round(totalAmount * 0.18);
+      // NO_GST
+      subtotal = contractTotal;
+      taxAmount = 0;
+      totalAmount = contractTotal;
+      internalTaxCalculated = 0;
     }
 
     const installments: InvoicePaymentInstallment[] = Array.isArray(data.installments) && data.installments.length > 0
@@ -2630,7 +2660,7 @@ const rawDataService = {
     // Identify targeted invoice if any
     let targetedInvoice = data.invoiceId ? invoicesList.find(i => i.id === data.invoiceId) : undefined;
     if (!targetedInvoice && data.projectId) {
-      targetedInvoice = invoicesList.find(i => i.projectId === data.projectId && i.status !== 'PAID');
+      targetedInvoice = invoicesList.find(i => i.projectId === data.projectId);
     }
 
     // STRICT CUMULATIVE CAP VALIDATION 1: Cannot exceed Project Contract Value
@@ -2727,58 +2757,11 @@ const rawDataService = {
       }
     }
 
-    let autoInvoice: Invoice | null = null;
-
-    // RULE: Only when the client pays totally (balanceDue === 0) and no existing invoice was targeted, create the invoice automatically!
-    if (project.balanceDue <= 0 && !targetedInvoice) {
+    // Never create duplicate invoice on split payment. Mark completed when balance is 0.
+    if (project.balanceDue <= 0) {
       project.status = 'COMPLETED';
-
-      // Auto-create official final tax invoice on completion date!
-      const nextInvNum = DataService.getNextInvoiceNumber();
-      const invoiceSubtotal = Math.round(project.totalValue / 1.18);
-      const invoiceTax = project.totalValue - invoiceSubtotal;
-
-      autoInvoice = {
-        id: `inv-${Date.now()}`,
-        invoiceNumber: nextInvNum,
-        clientId: client.id,
-        clientName: client.businessName,
-        clientEmail: client.email,
-        clientPhone: client.whatsappNumber,
-        projectId: project.id,
-        type: project.projectType === 'RECURRING_RETAINER' ? 'RECURRING_RETAINER' : 'MILESTONE_WEB_DEV',
-        subtotal: invoiceSubtotal,
-        gstType: 'INCLUSIVE_18',
-        amount: invoiceSubtotal,
-        taxAmount: invoiceTax,
-        totalAmount: project.totalValue,
-        paidAmount: project.totalValue,
-        balanceDue: 0,
-        internalTaxCalculated: invoiceTax,
-        status: 'PAID', // Automatically marked as PAID!
-        issueDate: paymentTimestamp.split('T')[0],
-        paidDate: paymentTimestamp.split('T')[0],
-        dueDate: paymentTimestamp.split('T')[0],
-        lineItems: [
-          {
-            id: `li-final-${Date.now()}`,
-            description: `${project.title} (100% Contract Delivery & Milestone Clearance)`,
-            quantity: 1,
-            rate: invoiceSubtotal,
-            amount: invoiceSubtotal
-          }
-        ],
-        notes: `Official Tax Invoice auto-generated on ${paymentTimestamp.split('T')[0]} upon 100% full settlement of all split milestone payments. Balance Due: ₹0 Nil.`,
-        isFinalInvoice: true,
-        createdAt: paymentTimestamp
-      };
-
-      invoicesList.unshift(autoInvoice);
-
-      receipt.autoInvoiceGenerated = true;
-      receipt.invoiceId = autoInvoice.id;
-      receipt.invoiceNumber = autoInvoice.invoiceNumber;
     }
+    receipt.autoInvoiceGenerated = false;
 
     receiptsList.unshift(receipt);
 
@@ -2833,7 +2816,7 @@ const rawDataService = {
       console.error('WhatsApp receipt dispatch error:', e);
     }
 
-    return { receipt, project, autoInvoice: autoInvoice || targetedInvoice };
+    return { receipt, project, autoInvoice: targetedInvoice || null };
   },
 
   deleteReceipt: (id: string, deletedBy?: string) => {
@@ -3262,7 +3245,9 @@ const rawDataService = {
     const activeRetainers = clientsList.filter(c => c.clientType === 'RECURRING_RETAINER' && c.status === 'ACTIVE');
     const mrr = activeRetainers.reduce((acc, c) => acc + c.monthlyRetainerAmount, 0);
 
-    const paidInvoices = invoicesList.filter(i => i.status === 'PAID');
+    const activeProjectIds = new Set(projectsList.map(p => p.id));
+    const activeInvoices = invoicesList.filter(i => !i.projectId || activeProjectIds.has(i.projectId));
+    const paidInvoices = activeInvoices.filter(i => i.status === 'PAID');
     const revenueThisMonth = paidInvoices.reduce((acc, i) => acc + i.totalAmount, 0);
 
     // Total Project Contracts + Client Retainers
@@ -3271,30 +3256,41 @@ const rawDataService = {
     const totalContractValue = totalProjectContracts + totalClientContracts;
 
     // Client Invoices & Receivables
-    const clientInvoicesTotal = invoicesList.reduce((acc, i) => acc + (i.totalAmount || 0), 0);
+    const clientInvoicesTotal = activeInvoices.reduce((acc, i) => acc + (i.totalAmount || 0), 0);
     const clientCollectedTotal = paidInvoices.reduce((acc, i) => acc + (i.totalAmount || 0), 0);
-    const unpaidInvoices = invoicesList.filter(i => i.status !== 'PAID');
+    const unpaidInvoices = activeInvoices.filter(i => i.status !== 'PAID');
     const clientBalanceToBePaid = unpaidInvoices.reduce((acc, i) => acc + (i.totalAmount || 0), 0);
 
     // This Month Sales / Project Value
     const now = new Date();
     const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const thisMonthInvoices = invoicesList.filter(i => (i.issueDate || i.createdAt || '').startsWith(currentYearMonth));
+    const thisMonthInvoices = activeInvoices.filter(i => (i.issueDate || i.createdAt || '').startsWith(currentYearMonth));
     const thisMonthSales = thisMonthInvoices.length > 0
       ? thisMonthInvoices.reduce((acc, i) => acc + (i.totalAmount || 0), 0)
       : revenueThisMonth;
 
-    // Total Expenses (Office Expenses + Domain, Hosting, SaaS, Freelancers, Influencers)
-    const officeCats: ExpenseCategory[] = ['RENT', 'ELECTRICITY_EB', 'MAINTENANCE', 'TEA_SNACKS', 'SALARY', 'MISCELLANEOUS'];
-    const techCats: ExpenseCategory[] = ['HOSTING_DOMAIN', 'SAAS_TOOL', 'SUBCONTRACTOR', 'FREELANCER', 'INFLUENCER_PAYOUT', 'PURCHASES_HARDWARE', 'AD_SPEND'];
+    // Strict two-bucket rule: Office Expenses vs Tech Expenses (Zero gap: Office + Tech === Total)
+    const isOfficeExpense = (cat?: string, title?: string) => {
+      const c = (cat || '').toUpperCase();
+      const t = (title || '').toUpperCase();
+      return c.includes('OFFICE') ||
+        ['RENT', 'ELECTRICITY_EB', 'MAINTENANCE', 'TEA_SNACKS', 'SALARY', 'MISCELLANEOUS', 'OFFICE_SUPPLIES', 'PANTRY'].includes(c) ||
+        t.includes('OFFICE') || t.includes('RENT') || t.includes('PANTRY') || t.includes('TEA') || t.includes('ELECTRICITY') || t.includes('EB') || t.includes('SALARY');
+    };
 
-    const totalExpenses = expensesList.reduce((acc, e) => acc + (e.amount || 0), 0);
-    const officeExpensesTotal = expensesList
-      .filter(e => officeCats.includes(e.category))
-      .reduce((acc, e) => acc + (e.amount || 0), 0);
-    const techPurchasesTotal = expensesList
-      .filter(e => techCats.includes(e.category))
-      .reduce((acc, e) => acc + (e.amount || 0), 0);
+    let officeExpensesTotal = 0;
+    let techPurchasesTotal = 0;
+
+    expensesList.forEach(e => {
+      const amt = e.amount || 0;
+      if (isOfficeExpense(e.category, e.description || (e as any).title)) {
+        officeExpensesTotal += amt;
+      } else {
+        techPurchasesTotal += amt;
+      }
+    });
+
+    const totalExpenses = officeExpensesTotal + techPurchasesTotal;
 
     // Vendor & Influencer Payables
     const vendorAndInfluencerPayables = vendorsList.reduce((acc, v) => acc + (v.balanceDue || 0), 0);
@@ -3335,7 +3331,7 @@ const rawDataService = {
     let toBeCollectedNextMonth = 0;
     const twoDayUpcomingDuesList: any[] = [];
 
-    invoicesList.forEach(inv => {
+    activeInvoices.forEach(inv => {
       const isPaid = inv.status === 'PAID' || inv.status === 'CLOSED';
       const balance = inv.balanceDue !== undefined ? inv.balanceDue : (isPaid ? 0 : inv.totalAmount);
       if (balance <= 0) return;
@@ -3404,7 +3400,7 @@ const rawDataService = {
     const twoDayUpcomingDuesAmount = twoDayUpcomingDuesList.reduce((sum, item) => sum + item.amount, 0);
 
     // This Month's Closed Business:
-    const thisMonthClosedInvoices = invoicesList.filter(i =>
+    const thisMonthClosedInvoices = activeInvoices.filter(i =>
       (i.status === 'PAID' || i.status === 'CLOSED') &&
       ((i.closedMonth && i.closedMonth.startsWith(currentYearMonth)) ||
         (i.paidDate && i.paidDate.startsWith(currentYearMonth)) ||
@@ -3413,15 +3409,21 @@ const rawDataService = {
     const thisMonthClosedBusiness = thisMonthClosedInvoices.reduce((acc, i) => acc + (i.totalAmount || 0), 0);
 
     // Monthly GST Payables to be filed (1st to 30th/31st of this month):
-    const gstInvoicesThisMonth = invoicesList.filter(i =>
+    const gstInvoicesThisMonth = activeInvoices.filter(i =>
       (i.issueDate && i.issueDate.startsWith(currentYearMonth)) ||
       (i.createdAt && i.createdAt.startsWith(currentYearMonth)) ||
       (i.closedMonth && i.closedMonth.startsWith(currentYearMonth))
     );
     const gstPayableThisMonth = gstInvoicesThisMonth.reduce((acc, i) => {
-      if (i.internalTaxCalculated) return acc + i.internalTaxCalculated;
-      if (i.gstType === 'INCLUSIVE_18') return acc + Math.round((i.totalAmount * 18) / 118);
-      return acc + Math.round(i.totalAmount * 0.18);
+      if (i.internalTaxCalculated !== undefined && i.internalTaxCalculated > 0) return acc + i.internalTaxCalculated;
+      if (i.gstType === 'INCLUSIVE_18') {
+        const base = Math.round((i.totalAmount || 0) / 1.18);
+        return acc + ((i.totalAmount || 0) - base);
+      }
+      if (i.gstType === 'ADDITIONAL_18') {
+        return acc + Math.round((i.subtotal || i.totalAmount || 0) * 0.18);
+      }
+      return acc;
     }, 0);
 
     return {

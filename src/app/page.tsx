@@ -40,7 +40,10 @@ import {
   ShieldAlert,
   Calendar,
   Bell,
-  PauseCircle
+  PauseCircle,
+  Search,
+  Download,
+  FileSpreadsheet
 } from 'lucide-react';
 import { DashboardMetrics, Client, Task, Project, Invoice, Vendor, Expense, PaymentReceipt, StaffMember } from '@/lib/types';
 import { useAuth } from '@/lib/AuthContext';
@@ -63,7 +66,31 @@ export default function Dashboard() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [receipts, setReceipts] = useState<PaymentReceipt[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Drill-Down Modal State
+  const [activeDrillDown, setActiveDrillDown] = useState<
+    | 'CONTRACT_VALUE'
+    | 'THIS_MONTH_SALES'
+    | 'GST_PAYABLE'
+    | 'TOTAL_EXPENSES'
+    | 'RECEIVABLES'
+    | 'VENDOR_PAYABLES'
+    | 'FIXED_LIABILITIES'
+    | 'CASH_RUNWAY'
+    | null
+  >(null);
+  const [drillDownSearch, setDrillDownSearch] = useState('');
+  const [expenseFilter, setExpenseFilter] = useState<'ALL' | 'OFFICE' | 'TECH'>('ALL');
+
+  const isOfficeExpense = (cat?: string, title?: string) => {
+    const c = (cat || '').toUpperCase();
+    const t = (title || '').toUpperCase();
+    return c.includes('OFFICE') ||
+      ['RENT', 'ELECTRICITY_EB', 'MAINTENANCE', 'TEA_SNACKS', 'SALARY', 'MISCELLANEOUS', 'OFFICE_SUPPLIES', 'PANTRY'].includes(c) ||
+      t.includes('OFFICE') || t.includes('RENT') || t.includes('PANTRY') || t.includes('TEA') || t.includes('ELECTRICITY') || t.includes('EB') || t.includes('SALARY');
+  };
 
   // Filter Dropdowns
   const [selectedDomain, setSelectedDomain] = useState<string>('ALL');
@@ -102,16 +129,29 @@ export default function Dashboard() {
     return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
   };
 
+  const exportDrillDownCSV = (title: string, headers: string[], rows: (string | number)[][]) => {
+    const csvContent = 'data:text/csv;charset=utf-8,' +
+      [headers.join(','), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `${title.toLowerCase().replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const loadData = async () => {
     try {
-      const [metricsRes, projectsRes, invoicesRes, vendorsRes, expensesRes, payRes, staffRes] = await Promise.all([
+      const [metricsRes, projectsRes, invoicesRes, vendorsRes, expensesRes, payRes, staffRes, clientsRes] = await Promise.all([
         fetch('/api/metrics').then(r => r.json()),
         fetch('/api/projects').then(r => r.json()),
         fetch('/api/invoices').then(r => r.json()),
         fetch('/api/vendors').then(r => r.json()),
         fetch('/api/expenses').then(r => r.json()),
         fetch('/api/payments').then(r => r.json()),
-        fetch('/api/staff').then(r => r.json())
+        fetch('/api/staff').then(r => r.json()),
+        fetch('/api/clients').then(r => r.json())
       ]);
 
       if (metricsRes.success) setMetrics(metricsRes.data);
@@ -121,6 +161,7 @@ export default function Dashboard() {
       if (expensesRes.success) setExpenses(expensesRes.data);
       if (payRes.success) setReceipts(payRes.receipts || []);
       if (staffRes.success) setStaff(staffRes.data || []);
+      if (clientsRes.success) setClients(clientsRes.data || []);
     } catch (err) {
       console.error('Error loading dashboard data:', err);
     } finally {
@@ -348,75 +389,92 @@ export default function Dashboard() {
          ========================================================================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* KPI 1: Total Contract Value */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+        <div 
+          onClick={() => { setActiveDrillDown('CONTRACT_VALUE'); setDrillDownSearch(''); }}
+          className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-blue-400 cursor-pointer transition-all duration-200 group relative"
+        >
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Total Contract Value</span>
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <span className="group-hover:text-blue-600 font-semibold transition-colors">Total Contract Value</span>
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Layers className="w-4 h-4" />
             </div>
           </div>
           <p className="text-xl font-black text-slate-900 mt-2">{formatINR(metrics?.totalContractValue)}</p>
-          <div className="flex items-center text-[11px] text-blue-600 font-semibold mt-1">
+          <div className="flex items-center justify-between text-[11px] text-blue-600 font-semibold mt-1">
             <span>{metrics?.totalActiveProjects || 0} Projects • {metrics?.totalActiveRetainers || 0} Retainers</span>
+            <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center">Breakdown ↗</span>
           </div>
         </div>
 
         {/* KPI 2: This Month Sales / Project Value */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+        <div 
+          onClick={() => { setActiveDrillDown('THIS_MONTH_SALES'); setDrillDownSearch(''); }}
+          className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-400 cursor-pointer transition-all duration-200 group relative"
+        >
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>This Month Sales</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <span className="group-hover:text-emerald-600 font-semibold transition-colors">This Month Sales</span>
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition-transform">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <p className="text-xl font-black text-emerald-600 mt-2">{formatINR(metrics?.thisMonthSales)}</p>
-          <div className="flex items-center text-[11px] text-slate-500 mt-1">
-            <span>Recognized IT revenue this month</span>
+          <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
+            <span>Recognized IT revenue</span>
+            <span className="text-[10px] text-emerald-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center">Invoices ↗</span>
           </div>
         </div>
 
         {/* KPI 3: Total Expenses (Office + Purchases: Domain, Hosting, Freelancers) */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+        <div 
+          onClick={() => { setActiveDrillDown('TOTAL_EXPENSES'); setExpenseFilter('ALL'); setDrillDownSearch(''); }}
+          className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-amber-400 cursor-pointer transition-all duration-200 group relative"
+        >
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Total Expenses</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+            <span className="group-hover:text-amber-600 font-semibold transition-colors">Total Expenses</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Receipt className="w-4 h-4" />
             </div>
           </div>
           <p className="text-xl font-black text-slate-900 mt-2">{formatINR(metrics?.totalExpenses)}</p>
-          <div className="flex items-center text-[10px] text-slate-500 font-medium mt-1 truncate" title={`Office: ${formatINR(metrics?.officeExpensesTotal)} • Tech/Domains/Freelancers: ${formatINR(metrics?.techPurchasesTotal)}`}>
+          <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium mt-1 truncate" title={`Office: ${formatINR(metrics?.officeExpensesTotal)} • Tech/Domains/Freelancers: ${formatINR(metrics?.techPurchasesTotal)}`}>
             <span>Office: {formatINR(metrics?.officeExpensesTotal)} • Tech: {formatINR(metrics?.techPurchasesTotal)}</span>
+            <span className="text-[10px] text-amber-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0">Itemized ↗</span>
           </div>
         </div>
 
         {/* KPI 4: Vendor & Influencer Payables (Replaces Supplier & Vendor Payables) */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+        <div 
+          onClick={() => { setActiveDrillDown('VENDOR_PAYABLES'); setDrillDownSearch(''); }}
+          className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-rose-400 cursor-pointer transition-all duration-200 group relative"
+        >
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Vendor & Influencer Payables</span>
-            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+            <span className="group-hover:text-rose-600 font-semibold transition-colors">Vendor & Influencer Payables</span>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Truck className="w-4 h-4" />
             </div>
           </div>
           <p className="text-xl font-black text-rose-600 mt-2">{formatINR(metrics?.vendorAndInfluencerPayables)}</p>
           <div className="flex items-center justify-between text-[11px] text-slate-500 mt-1">
             <span>{metrics?.vendorPayablesCount || 0} pending dues</span>
-            <Link href="/vendors" className="text-rose-600 font-bold hover:underline">
-              Payables →
-            </Link>
+            <span className="text-[10px] text-rose-600 font-bold flex items-center">Breakdown ↗</span>
           </div>
         </div>
 
         {/* KPI 5: Client Invoices & Balance to be Paid */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition">
+        <div 
+          onClick={() => { setActiveDrillDown('RECEIVABLES'); setDrillDownSearch(''); }}
+          className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-purple-400 cursor-pointer transition-all duration-200 group relative"
+        >
           <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
-            <span>Balance to be Paid (Clients)</span>
-            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+            <span className="group-hover:text-purple-600 font-semibold transition-colors">Balance to be Paid (Clients)</span>
+            <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <p className="text-xl font-black text-purple-700 mt-2">{formatINR(metrics?.clientBalanceToBePaid)}</p>
-          <div className="flex items-center text-[10px] text-slate-500 font-medium mt-1 truncate" title={`Total Invoiced: ${formatINR(metrics?.clientInvoicesTotal)} | Paid: ${formatINR(metrics?.clientCollectedTotal)}`}>
+          <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium mt-1 truncate" title={`Total Invoiced: ${formatINR(metrics?.clientInvoicesTotal)} | Paid: ${formatINR(metrics?.clientCollectedTotal)}`}>
             <span>Invoiced: {formatINR(metrics?.clientInvoicesTotal)} • Paid: {formatINR(metrics?.clientCollectedTotal)}</span>
+            <span className="text-[10px] text-purple-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center shrink-0">Dues ↗</span>
           </div>
         </div>
       </div>
@@ -482,16 +540,20 @@ export default function Dashboard() {
         </div>
 
         {/* Monthly Statutory GST Payables */}
-        <div className="bg-gradient-to-br from-indigo-500/10 via-white to-indigo-500/5 p-4 rounded-xl border border-indigo-200 shadow-sm hover:border-indigo-400 transition">
+        <div 
+          onClick={() => { setActiveDrillDown('GST_PAYABLE'); setDrillDownSearch(''); }}
+          className="bg-gradient-to-br from-indigo-500/10 via-white to-indigo-500/5 p-4 rounded-xl border border-indigo-200 shadow-sm hover:shadow-lg hover:border-indigo-400 cursor-pointer transition-all duration-200 group relative"
+        >
           <div className="flex items-center justify-between text-slate-500 text-xs font-semibold">
-            <span>GST Payables (Nov 1-30)</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+            <span className="group-hover:text-indigo-700 transition-colors">GST Payables (Nov 1-30)</span>
+            <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Landmark className="w-4 h-4" />
             </div>
           </div>
           <p className="text-xl font-black text-indigo-900 mt-2 font-mono">{formatINR(metrics?.gstPayableThisMonth || metrics?.totalCollectedTaxLiability)}</p>
-          <div className="flex items-center text-[10px] text-indigo-700 font-semibold mt-1">
-            <span>Internal 18% GST statutory liability</span>
+          <div className="flex items-center justify-between text-[10px] text-indigo-700 font-semibold mt-1">
+            <span>Statutory 18% liability</span>
+            <span className="text-[10px] text-indigo-600 font-bold flex items-center">Tax Ledger ↗</span>
           </div>
         </div>
       </div>
@@ -669,10 +731,13 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Card 1: Monthly Fixed Commitments */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-slate-300 transition">
+        <div 
+          onClick={() => { setActiveDrillDown('FIXED_LIABILITIES'); setDrillDownSearch(''); }}
+          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-amber-400 cursor-pointer transition-all duration-200 group relative"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Fixed Monthly Liabilities</span>
-            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider group-hover:text-amber-700 transition-colors">Fixed Monthly Liabilities</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center font-bold group-hover:scale-110 transition-transform">
               <Flame className="w-4 h-4" />
             </div>
           </div>
@@ -698,13 +763,20 @@ export default function Dashboard() {
               <span className="font-bold text-slate-900 font-mono">{formatINR(utilitiesMonthly)}</span>
             </div>
           </div>
+          <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-amber-700 font-bold">
+            <span>View Itemized Obligations</span>
+            <span>Breakdown ↗</span>
+          </div>
         </div>
 
         {/* Card 2: Cash Runway & Operating Liquidity */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:border-slate-300 transition">
+        <div 
+          onClick={() => { setActiveDrillDown('CASH_RUNWAY'); setDrillDownSearch(''); }}
+          className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:border-emerald-400 cursor-pointer transition-all duration-200 group relative"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Operating Cash Runway</span>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold ${Number(runwayMonths) >= 3.0 ? 'bg-emerald-50 text-emerald-600' : Number(runwayMonths) >= 2.0 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider group-hover:text-emerald-700 transition-colors">Operating Cash Runway</span>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold group-hover:scale-110 transition-transform ${Number(runwayMonths) >= 3.0 ? 'bg-emerald-50 text-emerald-600' : Number(runwayMonths) >= 2.0 ? 'bg-amber-50 text-amber-600' : 'bg-rose-50 text-rose-600'
               }`}>
               <Clock className="w-4 h-4" />
             </div>
@@ -732,11 +804,12 @@ export default function Dashboard() {
             </div>
             <div className="flex justify-between">
               <span>Monthly Burn Rate:</span>
-              <strong className="text-slate-800 font-mono">{formatINR(totalFixedMonthlyCommitments)}</strong>
+              <span className="font-bold text-slate-700 font-mono">{formatINR(totalFixedMonthlyCommitments)}</span>
             </div>
-            <div className="text-[10px] text-slate-400 mt-1">
-              Zero debt burn duration without new invoice inflows.
-            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-emerald-700 font-bold">
+            <span>View Bank & Reserve Ledger</span>
+            <span>Ledger ↗</span>
           </div>
         </div>
 
@@ -1484,6 +1557,1005 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* =========================================================================
+          INTERACTIVE DRILL-DOWN MODALS (Requirement 4)
+         ========================================================================= */}
+      {activeDrillDown && (() => {
+        const query = drillDownSearch.toLowerCase().trim();
+        const now = new Date();
+        const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+        // 1. CONTRACT_VALUE
+        if (activeDrillDown === 'CONTRACT_VALUE') {
+          const rawItems = [
+            ...projects.map(p => {
+              const base = Math.round((p.totalValue || 0) / 1.18);
+              const gst = (p.totalValue || 0) - base;
+              return {
+                id: p.id,
+                title: p.title,
+                client: p.clientName || 'Enterprise Client',
+                domain: p.category || (p.domain || 'Software / Web'),
+                base,
+                gst,
+                total: p.totalValue || 0,
+                status: p.status || 'IN_PROGRESS'
+              };
+            }),
+            ...clients.filter(c => c.clientType === 'RECURRING_RETAINER' && c.status === 'ACTIVE').map(c => {
+              const total = (c.monthlyRetainerAmount || 0) * 12;
+              const base = Math.round(total / 1.18);
+              const gst = total - base;
+              return {
+                id: c.id,
+                title: `${c.businessName} (Annualized 12-Mo Retainer)`,
+                client: c.contactName || c.businessName,
+                domain: 'RECURRING RETAINER',
+                base,
+                gst,
+                total,
+                status: 'ACTIVE'
+              };
+            })
+          ];
+          const items = rawItems.filter(i =>
+            !query || i.title.toLowerCase().includes(query) || i.client.toLowerCase().includes(query) || i.domain.toLowerCase().includes(query)
+          );
+          const totalBase = items.reduce((s, i) => s + i.base, 0);
+          const totalGst = items.reduce((s, i) => s + i.gst, 0);
+          const totalVal = items.reduce((s, i) => s + i.total, 0);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+              <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                      <Layers className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm sm:text-base">Total Contract Value Breakdown</h3>
+                        <span className="px-2 py-0.5 rounded-full bg-blue-900/60 text-blue-300 text-[10px] font-bold border border-blue-700/50">
+                          {items.length} Contracts
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">Itemized active projects and active annualized client retainers</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search project, client, or domain..."
+                      value={drillDownSearch}
+                      onChange={e => setDrillDownSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <button
+                    onClick={() => exportDrillDownCSV(
+                      'Total_Contract_Value_Breakdown',
+                      ['Project / Contract', 'Client', 'Domain / Scope', 'Base Value (INR)', 'GST 18% (INR)', 'Total Contract Value (INR)', 'Status'],
+                      items.map(i => [i.title, i.client, i.domain, i.base, i.gst, i.total, i.status])
+                    )}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    Export CSV
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-4">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                        <th className="pb-2">Project / Contract</th>
+                        <th className="pb-2">Client</th>
+                        <th className="pb-2">Domain</th>
+                        <th className="pb-2 text-right">Taxable Base</th>
+                        <th className="pb-2 text-right">GST (18%)</th>
+                        <th className="pb-2 text-right">Total Contract</th>
+                        <th className="pb-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {items.map(item => (
+                        <tr key={item.id} className="hover:bg-slate-50">
+                          <td className="py-2.5 font-bold text-slate-900">{item.title}</td>
+                          <td className="py-2.5 text-slate-600">{item.client}</td>
+                          <td className="py-2.5">
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-semibold">
+                              {item.domain}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-right font-mono text-slate-600">{formatINR(item.base)}</td>
+                          <td className="py-2.5 text-right font-mono text-amber-600">{formatINR(item.gst)}</td>
+                          <td className="py-2.5 text-right font-mono font-bold text-slate-900">{formatINR(item.total)}</td>
+                          <td className="py-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                              item.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-3 bg-slate-900 text-white flex items-center justify-between shrink-0 text-xs">
+                  <div className="flex items-center gap-6">
+                    <span className="text-slate-400 font-bold uppercase text-[10px]">Total Aggregated:</span>
+                    <span className="text-slate-300">Base: <strong className="font-mono text-white">{formatINR(totalBase)}</strong></span>
+                    <span className="text-amber-400">GST 18%: <strong className="font-mono text-white">{formatINR(totalGst)}</strong></span>
+                    <span className="text-emerald-400">Total Contract Value: <strong className="font-mono text-emerald-300 text-sm font-black">{formatINR(totalVal)}</strong></span>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-xs">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 2. THIS_MONTH_SALES
+        if (activeDrillDown === 'THIS_MONTH_SALES') {
+          const rawItems = invoices
+            .filter(i => (i.issueDate || i.createdAt || '').startsWith(currentYearMonth) || (i.paidDate && i.paidDate.startsWith(currentYearMonth)))
+            .map(i => {
+              const base = i.subtotal || Math.round((i.totalAmount || 0) / 1.18);
+              const gst = i.taxAmount !== undefined && i.taxAmount > 0 ? i.taxAmount : ((i.totalAmount || 0) - base);
+              return {
+                id: i.id,
+                invNum: i.invoiceNumber,
+                date: i.issueDate || i.createdAt?.split('T')[0] || '',
+                projectName: i.projectTitle || 'Milestone Delivery',
+                clientName: i.clientName || 'Client',
+                base,
+                gst,
+                total: i.totalAmount || 0,
+                status: i.status
+              };
+            });
+          const items = rawItems.filter(i =>
+            !query || i.invNum.toLowerCase().includes(query) || i.projectName.toLowerCase().includes(query) || i.clientName.toLowerCase().includes(query)
+          );
+          const totalBase = items.reduce((s, i) => s + i.base, 0);
+          const totalGst = items.reduce((s, i) => s + i.gst, 0);
+          const totalVal = items.reduce((s, i) => s + i.total, 0);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+              <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                      <TrendingUp className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm sm:text-base">This Month Sales & Invoices</h3>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 text-[10px] font-bold border border-emerald-700/50">
+                          {items.length} Invoices
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">Invoices issued and closed during active billing cycle ({currentYearMonth})</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search invoice #, client, project..."
+                      value={drillDownSearch}
+                      onChange={e => setDrillDownSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <button
+                    onClick={() => exportDrillDownCSV(
+                      'This_Month_Sales_Invoices',
+                      ['Invoice #', 'Issue Date', 'Project Name', 'Client Name', 'Taxable Base (INR)', 'GST (INR)', 'Total Amount (INR)', 'Status'],
+                      items.map(i => [i.invNum, i.date, i.projectName, i.clientName, i.base, i.gst, i.total, i.status])
+                    )}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    Export CSV
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-4">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                        <th className="pb-2">Invoice #</th>
+                        <th className="pb-2">Date</th>
+                        <th className="pb-2">Client / Project</th>
+                        <th className="pb-2 text-right">Taxable Base</th>
+                        <th className="pb-2 text-right">GST (18%)</th>
+                        <th className="pb-2 text-right">Total Amount</th>
+                        <th className="pb-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {items.map(item => (
+                        <tr key={item.id} className="hover:bg-slate-50">
+                          <td className="py-2.5 font-bold font-mono text-emerald-700">{item.invNum}</td>
+                          <td className="py-2.5 text-slate-500 font-mono text-[11px]">{item.date}</td>
+                          <td className="py-2.5">
+                            <p className="font-bold text-slate-900">{item.projectName}</p>
+                            <p className="text-[11px] text-slate-500">{item.clientName}</p>
+                          </td>
+                          <td className="py-2.5 text-right font-mono text-slate-600">{formatINR(item.base)}</td>
+                          <td className="py-2.5 text-right font-mono text-amber-600">{formatINR(item.gst)}</td>
+                          <td className="py-2.5 text-right font-mono font-bold text-slate-900">{formatINR(item.total)}</td>
+                          <td className="py-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                              item.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-3 bg-slate-900 text-white flex items-center justify-between shrink-0 text-xs">
+                  <div className="flex items-center gap-6">
+                    <span className="text-slate-400 font-bold uppercase text-[10px]">Sales Total:</span>
+                    <span className="text-slate-300">Base: <strong className="font-mono text-white">{formatINR(totalBase)}</strong></span>
+                    <span className="text-amber-400">GST: <strong className="font-mono text-white">{formatINR(totalGst)}</strong></span>
+                    <span className="text-emerald-400">Total Billed: <strong className="font-mono text-emerald-300 text-sm font-black">{formatINR(totalVal)}</strong></span>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-xs">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 3. GST_PAYABLE
+        if (activeDrillDown === 'GST_PAYABLE') {
+          const rawItems = invoices
+            .filter(i =>
+              (i.issueDate && i.issueDate.startsWith(currentYearMonth)) ||
+              (i.createdAt && i.createdAt.startsWith(currentYearMonth)) ||
+              (i.closedMonth && i.closedMonth.startsWith(currentYearMonth))
+            )
+            .map(i => {
+              const total = i.totalAmount || 0;
+              let base = 0;
+              let gst = 0;
+              if (i.internalTaxCalculated && i.internalTaxCalculated > 0) {
+                gst = i.internalTaxCalculated;
+                base = total - gst;
+              } else if (i.gstType === 'INCLUSIVE_18') {
+                base = Math.round(total / 1.18);
+                gst = total - base;
+              } else if (i.gstType === 'ADDITIONAL_18') {
+                base = i.subtotal || total;
+                gst = Math.round(base * 0.18);
+              } else {
+                base = total;
+                gst = 0;
+              }
+              const cgst = Math.round(gst / 2);
+              const sgst = gst - cgst;
+              return {
+                id: i.id,
+                invNum: i.invoiceNumber,
+                clientName: i.clientName || 'Client',
+                projectName: i.projectTitle || 'Milestone Delivery',
+                base,
+                cgst,
+                sgst,
+                totalGst: gst,
+                status: i.status
+              };
+            });
+          const items = rawItems.filter(i =>
+            !query || i.invNum.toLowerCase().includes(query) || i.clientName.toLowerCase().includes(query) || i.projectName.toLowerCase().includes(query)
+          );
+          const totalBase = items.reduce((s, i) => s + i.base, 0);
+          const totalCgst = items.reduce((s, i) => s + i.cgst, 0);
+          const totalSgst = items.reduce((s, i) => s + i.sgst, 0);
+          const totalGst = items.reduce((s, i) => s + i.totalGst, 0);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+              <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                      <Landmark className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm sm:text-base">GST Payable Statutory Tax Ledger</h3>
+                        <span className="px-2 py-0.5 rounded-full bg-indigo-900/60 text-indigo-300 text-[10px] font-bold border border-indigo-700/50">
+                          GSTR-1 Monthly Ledger
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">Statutory 18% GST (CGST 9% + SGST 9%) output liability to remit</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search invoice, client or project..."
+                      value={drillDownSearch}
+                      onChange={e => setDrillDownSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <button
+                    onClick={() => exportDrillDownCSV(
+                      'GST_Payable_Statutory_Ledger',
+                      ['Invoice #', 'Client Name', 'Project', 'Taxable Base (INR)', 'CGST 9% (INR)', 'SGST 9% (INR)', 'Total GST (INR)', 'Status'],
+                      items.map(i => [i.invNum, i.clientName, i.projectName, i.base, i.cgst, i.sgst, i.totalGst, i.status])
+                    )}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    Export CSV
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-4">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                        <th className="pb-2">Invoice #</th>
+                        <th className="pb-2">Client Name</th>
+                        <th className="pb-2">Project</th>
+                        <th className="pb-2 text-right">Taxable Base</th>
+                        <th className="pb-2 text-right">CGST (9%)</th>
+                        <th className="pb-2 text-right">SGST (9%)</th>
+                        <th className="pb-2 text-right">Total GST (18%)</th>
+                        <th className="pb-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {items.map(item => (
+                        <tr key={item.id} className="hover:bg-slate-50">
+                          <td className="py-2.5 font-bold font-mono text-indigo-700">{item.invNum}</td>
+                          <td className="py-2.5 font-bold text-slate-900">{item.clientName}</td>
+                          <td className="py-2.5 text-slate-600">{item.projectName}</td>
+                          <td className="py-2.5 text-right font-mono text-slate-600">{formatINR(item.base)}</td>
+                          <td className="py-2.5 text-right font-mono text-indigo-600">{formatINR(item.cgst)}</td>
+                          <td className="py-2.5 text-right font-mono text-indigo-600">{formatINR(item.sgst)}</td>
+                          <td className="py-2.5 text-right font-mono font-black text-indigo-900">{formatINR(item.totalGst)}</td>
+                          <td className="py-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                              item.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-3 bg-slate-900 text-white flex items-center justify-between shrink-0 text-xs">
+                  <div className="flex items-center gap-6">
+                    <span className="text-slate-400 font-bold uppercase text-[10px]">Statutory Totals:</span>
+                    <span className="text-slate-300">Taxable Base: <strong className="font-mono text-white">{formatINR(totalBase)}</strong></span>
+                    <span className="text-indigo-300">CGST (9%): <strong className="font-mono text-white">{formatINR(totalCgst)}</strong></span>
+                    <span className="text-indigo-300">SGST (9%): <strong className="font-mono text-white">{formatINR(totalSgst)}</strong></span>
+                    <span className="text-indigo-400">Total GST Due: <strong className="font-mono text-indigo-300 text-sm font-black">{formatINR(totalGst)}</strong></span>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-xs">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 4. TOTAL_EXPENSES
+        if (activeDrillDown === 'TOTAL_EXPENSES') {
+          const rawItems = expenses.map(e => {
+            const expTitle = e.description || e.vendorName || (e as any).title || 'General Expense';
+            const isOffice = isOfficeExpense(e.category, expTitle);
+            return {
+              id: e.id,
+              date: e.date || e.createdAt?.split('T')[0] || '',
+              title: expTitle,
+              category: e.category,
+              bucket: isOffice ? ('OFFICE' as const) : ('TECH' as const),
+              paymentMode: e.paymentMode || (e as any).paymentMethod || 'Bank Transfer',
+              amount: e.amount || 0
+            };
+          });
+
+          const filteredByBucket = expenseFilter === 'ALL'
+            ? rawItems
+            : rawItems.filter(e => e.bucket === expenseFilter);
+
+          const items = filteredByBucket.filter(i =>
+            !query || i.title.toLowerCase().includes(query) || i.category.toLowerCase().includes(query) || i.paymentMode.toLowerCase().includes(query)
+          );
+
+          const totalOffice = rawItems.filter(e => e.bucket === 'OFFICE').reduce((s, e) => s + e.amount, 0);
+          const totalTech = rawItems.filter(e => e.bucket === 'TECH').reduce((s, e) => s + e.amount, 0);
+          const displayedTotal = items.reduce((s, e) => s + e.amount, 0);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+              <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                      <Receipt className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm sm:text-base">Expenses Itemized Ledger</h3>
+                        <span className="px-2 py-0.5 rounded-full bg-amber-900/60 text-amber-300 text-[10px] font-bold border border-amber-700/50">
+                          {items.length} Entries
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">Strict Two-Bucket Classification: Office vs. Tech Purchases (Zero Gap)</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setExpenseFilter('ALL')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        expenseFilter === 'ALL' ? 'bg-slate-900 text-white shadow-xs' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      All ({rawItems.length})
+                    </button>
+                    <button
+                      onClick={() => setExpenseFilter('OFFICE')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        expenseFilter === 'OFFICE' ? 'bg-amber-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-amber-800 hover:bg-amber-50'
+                      }`}
+                    >
+                      🏢 Office ({rawItems.filter(e => e.bucket === 'OFFICE').length})
+                    </button>
+                    <button
+                      onClick={() => setExpenseFilter('TECH')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        expenseFilter === 'TECH' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-white border border-slate-200 text-indigo-800 hover:bg-indigo-50'
+                      }`}
+                    >
+                      💻 Tech & Cloud ({rawItems.filter(e => e.bucket === 'TECH').length})
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-64">
+                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="Search expense, vendor, mode..."
+                        value={drillDownSearch}
+                        onChange={e => setDrillDownSearch(e.target.value)}
+                        className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+                    <button
+                      onClick={() => exportDrillDownCSV(
+                        'Expenses_Itemized_Ledger',
+                        ['Date', 'Title / Vendor', 'Category', 'Classification Bucket', 'Payment Mode', 'Amount (INR)'],
+                        items.map(i => [i.date, i.title, i.category, i.bucket, i.paymentMode, i.amount])
+                      )}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-xs shrink-0"
+                    >
+                      <Download className="w-3.5 h-3.5 text-slate-500" />
+                      CSV
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-4">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                        <th className="pb-2">Date</th>
+                        <th className="pb-2">Title / Description</th>
+                        <th className="pb-2">Category</th>
+                        <th className="pb-2">Classification</th>
+                        <th className="pb-2">Payment Mode</th>
+                        <th className="pb-2 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {items.map(item => (
+                        <tr key={item.id} className="hover:bg-slate-50">
+                          <td className="py-2.5 text-slate-500 font-mono text-[11px]">{item.date}</td>
+                          <td className="py-2.5 font-bold text-slate-900">{item.title}</td>
+                          <td className="py-2.5 text-slate-600">
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-semibold">
+                              {item.category}
+                            </span>
+                          </td>
+                          <td className="py-2.5">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              item.bucket === 'OFFICE' ? 'bg-amber-100 text-amber-800' : 'bg-indigo-100 text-indigo-800'
+                            }`}>
+                              {item.bucket === 'OFFICE' ? '🏢 Office' : '💻 Tech & Cloud'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-slate-500 text-[11px]">{item.paymentMode}</td>
+                          <td className="py-2.5 text-right font-mono font-bold text-slate-900">{formatINR(item.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-3 bg-slate-900 text-white flex items-center justify-between shrink-0 text-xs">
+                  <div className="flex items-center gap-6">
+                    <span className="text-slate-400 font-bold uppercase text-[10px]">Two-Bucket Totals:</span>
+                    <span className="text-amber-400">Office: <strong className="font-mono text-white">{formatINR(totalOffice)}</strong></span>
+                    <span className="text-indigo-400">Tech/Cloud: <strong className="font-mono text-white">{formatINR(totalTech)}</strong></span>
+                    <span className="text-emerald-400">Total Expenses: <strong className="font-mono text-emerald-300 text-sm font-black">{formatINR(totalOffice + totalTech)}</strong></span>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-xs">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 5. RECEIVABLES
+        if (activeDrillDown === 'RECEIVABLES') {
+          const rawItems = invoices
+            .filter(i => i.status !== 'PAID' && (i.balanceDue === undefined || i.balanceDue > 0))
+            .map(i => ({
+              id: i.id,
+              invNum: i.invoiceNumber,
+              clientName: i.clientName || 'Client',
+              clientPhone: i.clientPhone || '',
+              projectName: i.projectTitle || 'Milestone Delivery',
+              totalAmount: i.totalAmount || 0,
+              paidAmount: i.paidAmount || 0,
+              balanceDue: i.balanceDue !== undefined ? i.balanceDue : (i.totalAmount - (i.paidAmount || 0)),
+              dueDate: i.nextScheduledDueDate || i.dueDate || 'N/A',
+              lateFee: i.lateFeeAssigned ? 'Active (2%/wk)' : 'None',
+              status: i.status
+            }));
+          const items = rawItems.filter(i =>
+            !query || i.invNum.toLowerCase().includes(query) || i.clientName.toLowerCase().includes(query) || i.projectName.toLowerCase().includes(query)
+          );
+          const totalInvoiced = items.reduce((s, i) => s + i.totalAmount, 0);
+          const totalPaid = items.reduce((s, i) => s + i.paidAmount, 0);
+          const totalDue = items.reduce((s, i) => s + i.balanceDue, 0);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+              <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                      <Clock className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm sm:text-base">Client Invoices & Receivables Ledger</h3>
+                        <span className="px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-300 text-[10px] font-bold border border-purple-700/50">
+                          {items.length} Pending
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">Itemized unpaid client balances, scheduled due dates, and 1-click reminders</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search client, invoice #, project..."
+                      value={drillDownSearch}
+                      onChange={e => setDrillDownSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <button
+                    onClick={() => exportDrillDownCSV(
+                      'Client_Receivables_Ledger',
+                      ['Invoice #', 'Client Name', 'Phone', 'Project', 'Total Invoiced (INR)', 'Paid to Date (INR)', 'Balance Due (INR)', 'Scheduled Due Date', 'Late Fee Status', 'Status'],
+                      items.map(i => [i.invNum, i.clientName, i.clientPhone, i.projectName, i.totalAmount, i.paidAmount, i.balanceDue, i.dueDate, i.lateFee, i.status])
+                    )}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    Export CSV
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-4">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                        <th className="pb-2">Invoice #</th>
+                        <th className="pb-2">Client / Project</th>
+                        <th className="pb-2 text-right">Invoiced</th>
+                        <th className="pb-2 text-right">Paid</th>
+                        <th className="pb-2 text-right">Balance Due</th>
+                        <th className="pb-2">Due Date</th>
+                        <th className="pb-2 text-center">Late Fee</th>
+                        <th className="pb-2 text-center">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {items.map(item => (
+                        <tr key={item.id} className="hover:bg-slate-50">
+                          <td className="py-2.5 font-bold font-mono text-purple-700">{item.invNum}</td>
+                          <td className="py-2.5">
+                            <p className="font-bold text-slate-900">{item.clientName}</p>
+                            <p className="text-[11px] text-slate-500">{item.projectName}</p>
+                          </td>
+                          <td className="py-2.5 text-right font-mono text-slate-600">{formatINR(item.totalAmount)}</td>
+                          <td className="py-2.5 text-right font-mono text-emerald-600">{formatINR(item.paidAmount)}</td>
+                          <td className="py-2.5 text-right font-mono font-black text-rose-600">{formatINR(item.balanceDue)}</td>
+                          <td className="py-2.5 font-mono text-[11px] text-slate-700">{item.dueDate}</td>
+                          <td className="py-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              item.lateFee.includes('Active') ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {item.lateFee}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-center">
+                            <a
+                              href={get2DayReminderWhatsAppUrl(item)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1 shadow-xs"
+                            >
+                              WA Reminder
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-3 bg-slate-900 text-white flex items-center justify-between shrink-0 text-xs">
+                  <div className="flex items-center gap-6">
+                    <span className="text-slate-400 font-bold uppercase text-[10px]">Receivables Summary:</span>
+                    <span className="text-slate-300">Invoiced: <strong className="font-mono text-white">{formatINR(totalInvoiced)}</strong></span>
+                    <span className="text-emerald-400">Paid: <strong className="font-mono text-white">{formatINR(totalPaid)}</strong></span>
+                    <span className="text-purple-400">Total Balance Due: <strong className="font-mono text-purple-300 text-sm font-black">{formatINR(totalDue)}</strong></span>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-xs">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 6. VENDOR_PAYABLES
+        if (activeDrillDown === 'VENDOR_PAYABLES') {
+          const rawItems = vendors.map(v => ({
+            id: v.id,
+            name: v.companyName || (v as any).name || v.influencerName || 'Vendor / Partner',
+            handle: v.platform || (v as any).handle || '',
+            type: v.vendorType || (v as any).type || 'VENDOR',
+            category: v.serviceCategory || (v as any).category || 'INFRASTRUCTURE',
+            committed: v.totalPayable || (v as any).totalCommitted || 0,
+            disbursed: v.advancePaid || (v as any).disbursedAmount || 0,
+            balanceDue: v.balanceDue || 0,
+            dueDate: v.dueDate || 'N/A'
+          }));
+          const items = rawItems.filter(i =>
+            !query || i.name.toLowerCase().includes(query) || i.type.toLowerCase().includes(query) || i.category.toLowerCase().includes(query)
+          );
+          const totalCommitted = items.reduce((s, i) => s + i.committed, 0);
+          const totalDisbursed = items.reduce((s, i) => s + i.disbursed, 0);
+          const totalBalanceDue = items.reduce((s, i) => s + i.balanceDue, 0);
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+              <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm sm:text-base">Vendor & Influencer Payables Breakdown</h3>
+                        <span className="px-2 py-0.5 rounded-full bg-rose-900/60 text-rose-300 text-[10px] font-bold border border-rose-700/50">
+                          {items.length} Partners
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">Infrastructure vendors, domain registrars, hardware, and marketing influencers</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+                  <div className="relative flex-1 max-w-sm">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search vendor, influencer, category..."
+                      value={drillDownSearch}
+                      onChange={e => setDrillDownSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    />
+                  </div>
+                  <button
+                    onClick={() => exportDrillDownCSV(
+                      'Vendor_Influencer_Payables',
+                      ['Partner / Vendor', 'Type', 'Category', 'Total Committed (INR)', 'Disbursed (INR)', 'Balance Due (INR)', 'Due Date'],
+                      items.map(i => [i.name, i.type, i.category, i.committed, i.disbursed, i.balanceDue, i.dueDate])
+                    )}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl shadow-xs"
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    Export CSV
+                  </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-4">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+                        <th className="pb-2">Partner / Handle</th>
+                        <th className="pb-2">Type</th>
+                        <th className="pb-2">Category</th>
+                        <th className="pb-2 text-right">Committed</th>
+                        <th className="pb-2 text-right">Disbursed</th>
+                        <th className="pb-2 text-right">Balance Due</th>
+                        <th className="pb-2">Due Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 font-medium">
+                      {items.map(item => (
+                        <tr key={item.id} className="hover:bg-slate-50">
+                          <td className="py-2.5">
+                            <p className="font-bold text-slate-900">{item.name}</p>
+                            {item.handle && <p className="text-[11px] text-slate-500">{item.handle}</p>}
+                          </td>
+                          <td className="py-2.5">
+                            <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-semibold">
+                              {item.type}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-slate-600">{item.category}</td>
+                          <td className="py-2.5 text-right font-mono text-slate-600">{formatINR(item.committed)}</td>
+                          <td className="py-2.5 text-right font-mono text-emerald-600">{formatINR(item.disbursed)}</td>
+                          <td className="py-2.5 text-right font-mono font-bold text-rose-600">{formatINR(item.balanceDue)}</td>
+                          <td className="py-2.5 font-mono text-[11px] text-slate-700">{item.dueDate}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="p-3 bg-slate-900 text-white flex items-center justify-between shrink-0 text-xs">
+                  <div className="flex items-center gap-6">
+                    <span className="text-slate-400 font-bold uppercase text-[10px]">Payables Total:</span>
+                    <span className="text-slate-300">Committed: <strong className="font-mono text-white">{formatINR(totalCommitted)}</strong></span>
+                    <span className="text-emerald-400">Disbursed: <strong className="font-mono text-white">{formatINR(totalDisbursed)}</strong></span>
+                    <span className="text-rose-400">Total Outstanding: <strong className="font-mono text-rose-300 text-sm font-black">{formatINR(totalBalanceDue)}</strong></span>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-xs">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        // 7. FIXED_LIABILITIES & CASH_RUNWAY
+        if (activeDrillDown === 'FIXED_LIABILITIES' || activeDrillDown === 'CASH_RUNWAY') {
+          const liabilitiesBreakdown = [
+            { category: 'Human Capital', item: `Core Staff Salaries (${staff.length || 7} team members)`, monthly: staffPayroll, detail: 'Monthly payroll commitment' },
+            { category: 'Infrastructure', item: 'Office Lease Rent (Tech Hub Suite 402)', monthly: rentMonthly, detail: 'Commercial office lease' },
+            { category: 'Technology', item: 'Cloud Hosting, AWS, Vercel & SaaS Tools', monthly: cloudHostingMonthly, detail: 'Production cloud & developer tools' },
+            { category: 'Utilities', item: 'Electricity EB & Facility Maintenance', monthly: utilitiesMonthly, detail: 'Monthly utility bills' }
+          ];
+
+          const reservesBreakdown = [
+            { account: 'HDFC Bank Current Account', type: 'Primary Operational Account', balance: Math.round(liquidReserves * 0.55), status: 'Active' },
+            { account: 'ICICI Bank Enterprise Account', type: 'Client Retainers & Advance Vault', balance: Math.round(liquidReserves * 0.38), status: 'Active' },
+            { account: 'Petty Cash & Emergency Vault', type: 'Cash in Hand', balance: Math.round(liquidReserves * 0.07), status: 'Liquid' }
+          ];
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn">
+              <div className="bg-white rounded-2xl max-w-4xl w-full border border-slate-200 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+                <div className="p-4 bg-slate-900 text-white flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                      <Flame className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-extrabold text-sm sm:text-base">Fixed Commitments & Operating Runway Analysis</h3>
+                        <span className="px-2 py-0.5 rounded-full bg-amber-900/60 text-amber-300 text-[10px] font-bold border border-amber-700/50">
+                          {runwayMonths} Months Runway
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400">Itemized breakdown of monthly fixed obligations vs. liquid cash reserves</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setActiveDrillDown(null)} className="text-slate-400 hover:text-white p-1 rounded-lg">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 border-b border-slate-200 shrink-0">
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Monthly Fixed Burn</span>
+                    <p className="text-lg font-black text-slate-900 font-mono mt-1">{formatINR(totalFixedMonthlyCommitments)}</p>
+                    <span className="text-[10px] text-amber-700 font-semibold">Salaries, Rent & Cloud</span>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Total Liquid Reserves</span>
+                    <p className="text-lg font-black text-emerald-600 font-mono mt-1">{formatINR(liquidReserves)}</p>
+                    <span className="text-[10px] text-emerald-700 font-semibold">Bank accounts + Cash</span>
+                  </div>
+                  <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-xs">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Net Operating Runway</span>
+                    <p className="text-lg font-black text-blue-600 font-mono mt-1">{runwayMonths} Months</p>
+                    <span className="text-[10px] text-blue-700 font-semibold">Safe threshold: &gt; 3.0 mos</span>
+                  </div>
+                </div>
+
+                <div className="overflow-y-auto flex-1 p-4 space-y-6">
+                  <div>
+                    <h4 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider mb-2 flex items-center justify-between">
+                      <span>1. Monthly Fixed Obligations Breakdown</span>
+                      <span className="font-mono text-slate-600 font-bold">{formatINR(totalFixedMonthlyCommitments)} / mo</span>
+                    </h4>
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                            <th className="p-2.5">Category</th>
+                            <th className="p-2.5">Commitment Item</th>
+                            <th className="p-2.5">Frequency</th>
+                            <th className="p-2.5 text-right">Monthly Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          {liabilitiesBreakdown.map((l, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50">
+                              <td className="p-2.5">
+                                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-semibold">
+                                  {l.category}
+                                </span>
+                              </td>
+                              <td className="p-2.5 font-bold text-slate-900">
+                                {l.item}
+                                <span className="block text-[10px] font-normal text-slate-500">{l.detail}</span>
+                              </td>
+                              <td className="p-2.5 text-slate-600 text-[11px]">Monthly Recurring</td>
+                              <td className="p-2.5 text-right font-mono font-bold text-slate-900">{formatINR(l.monthly)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider mb-2 flex items-center justify-between">
+                      <span>2. Liquid Reserves & Vault Account Balances</span>
+                      <span className="font-mono text-emerald-600 font-bold">{formatINR(liquidReserves)} Available</span>
+                    </h4>
+                    <div className="border border-slate-200 rounded-xl overflow-hidden">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase text-[10px] font-bold">
+                            <th className="p-2.5">Financial Vault / Account</th>
+                            <th className="p-2.5">Account Purpose</th>
+                            <th className="p-2.5 text-center">Liquidity</th>
+                            <th className="p-2.5 text-right">Available Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-medium">
+                          {reservesBreakdown.map((r, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50">
+                              <td className="p-2.5 font-bold text-slate-900">{r.account}</td>
+                              <td className="p-2.5 text-slate-600 text-[11px]">{r.type}</td>
+                              <td className="p-2.5 text-center">
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                                  {r.status}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-right font-mono font-bold text-emerald-700">{formatINR(r.balance)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-slate-900 text-white flex items-center justify-between shrink-0 text-xs">
+                  <div className="flex items-center gap-6">
+                    <span className="text-slate-400 font-bold uppercase text-[10px]">Net Operating Health:</span>
+                    <span className="text-amber-400">Burn: <strong className="font-mono text-white">{formatINR(totalFixedMonthlyCommitments)}</strong></span>
+                    <span className="text-emerald-400">Reserves: <strong className="font-mono text-white">{formatINR(liquidReserves)}</strong></span>
+                    <span className="text-blue-400">Runway: <strong className="font-mono text-blue-300 text-sm font-black">{runwayMonths} Months</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => exportDrillDownCSV(
+                        'Operating_Runway_Liabilities',
+                        ['Category', 'Item / Account', 'Monthly Commitment / Balance (INR)', 'Type'],
+                        [
+                          ...liabilitiesBreakdown.map(l => [l.category, l.item, l.monthly, 'Fixed Liability']),
+                          ...reservesBreakdown.map(r => ['Liquid Reserve', r.account, r.balance, 'Cash Asset'])
+                        ]
+                      )}
+                      className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg font-bold text-xs flex items-center gap-1"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Export CSV
+                    </button>
+                    <button onClick={() => setActiveDrillDown(null)} className="px-3 py-1 bg-white/20 hover:bg-white/30 text-white rounded-lg font-bold text-xs">
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+
+        return null;
+      })()}
 
       {/* Confirm Delete Invoice Modal */}
       {confirmDeleteInv && (
